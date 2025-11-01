@@ -12,19 +12,23 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
     },
     body: JSON.stringify({
       amount, // em centavos (ex: R$ 10,00 = 1000)
-      currency,
-      external_id: userRef,
+      currency: currency || 'BRL',
+      external_id: `${userRef}-${Date.now()}`, // evita duplicidade
       payment_method: "pix",
       buyer_infos: {
-        buyer_name: "Usuário Teste",
-        buyer_email: "teste@example.com",
-        buyer_document: "00000000000",
-        buyer_phone: "11999999999"
+        buyer_name: "João da Silva", // nome válido
+        buyer_email: "joao@example.com", // e-mail válido
+        buyer_document: "12345678909", // CPF válido (11 dígitos)
+        buyer_phone: "11999999999" // DDD + número, só números
       }
     })
   });
 
-  if (!resp.ok) throw new Error(`BullsPay error ${resp.status}`);
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    throw new Error(`BullsPay error ${resp.status}: ${errorText}`);
+  }
+
   const data = await resp.json();
 
   return {
@@ -48,14 +52,18 @@ export async function createPayout({ amount, currency, userRef, destination }) {
     },
     body: JSON.stringify({
       amount,
-      currency,
-      external_id: userRef,
+      currency: currency || 'BRL',
+      external_id: `${userRef}-${Date.now()}`,
       destination,
       callbackUrl: `${process.env.PUBLIC_BASE_URL}/api/webhooks/bullspay`
     })
   });
 
-  if (!resp.ok) throw new Error(`BullsPay error ${resp.status}`);
+  if (!resp.ok) {
+    const errorText = await resp.text();
+    throw new Error(`BullsPay error ${resp.status}: ${errorText}`);
+  }
+
   const data = await resp.json();
 
   return {
