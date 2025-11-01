@@ -16,7 +16,7 @@ export function verifyWebhook(req) {
   return provided === calc;
 }
 
-// Cria uma intenção de pagamento (depósito)
+// Cria uma intenção de pagamento (depósito via Pix)
 export async function createPaymentIntent({ amount, currency, userRef }) {
   const resp = await fetch('https://api.fxpay.com/v1/payments/intents', {
     method: 'POST',
@@ -34,10 +34,19 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
   });
 
   if (!resp.ok) throw new Error(`FXPay error ${resp.status}`);
-  return await resp.json(); // esperado: { id, checkoutUrl, status, ... }
+  const data = await resp.json();
+
+  // Retorna os campos importantes para o frontend
+  return {
+    id: data.id,
+    status: data.status,
+    checkoutUrl: data.checkoutUrl,
+    pixCopiaCola: data.pixCopiaCola,
+    pixQrCode: data.pixQrCode
+  };
 }
 
-// Cria um payout (saque)
+// Cria uma solicitação de saque (payout)
 export async function createPayout({ amount, currency, userRef, destination }) {
   const resp = await fetch('https://api.fxpay.com/v1/payouts', {
     method: 'POST',
@@ -55,33 +64,11 @@ export async function createPayout({ amount, currency, userRef, destination }) {
   });
 
   if (!resp.ok) throw new Error(`FXPay error ${resp.status}`);
-  return await resp.json(); // esperado: { id, status, ... }
-}
+  const data = await resp.json();
 
-// Consulta status de um pagamento
-export async function fetchPaymentStatus(id) {
-  const resp = await fetch(
-    `https://api.fxpay.com/v1/payments/status?id=${id}&client_id=${process.env.FXPAY_CLIENT_ID}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.FXPAY_API_KEY}`
-      }
-    }
-  );
-  if (!resp.ok) throw new Error(`FXPay status error ${resp.status}`);
-  return await resp.json();
+  return {
+    id: data.id,
+    status: data.status,
+    raw: data
+  };
 }
-
-// Consulta status de um payout
-export async function fetchPayoutStatus(id) {
-  const resp = await fetch(
-    `https://api.fxpay.com/v1/payouts/status?id=${id}&client_id=${process.env.FXPAY_CLIENT_ID}`,
-    {
-      headers: {
-        'Authorization': `Bearer ${process.env.FXPAY_API_KEY}`
-      }
-    }
-  );
-  if (!resp.ok) throw new Error(`FXPay payout status error ${resp.status}`);
-  return await resp.json();
-  }
