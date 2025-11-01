@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { pool, init } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
-import { verifyWebhook, createPaymentIntent, createPayout } from './fxpay.js';
+import { createPaymentIntent, createPayout } from './bullspay.js'; // <-- trocado para BullsPay
 
 dotenv.config();
 const app = express();
@@ -86,27 +86,32 @@ app.get('/api/wallet/:userId', async (req, res) => {
   res.json(w || { balance: 0, hold: 0 });
 });
 
-// Depósito
+// Depósito (BullsPay)
 app.post('/api/payments/deposit-intent', async (req, res) => {
   try {
     const { userId, amount, currency = 'BRL' } = req.body;
     if (!userId || !amount || amount <= 0)
       return res.status(400).json({ error: 'parâmetros inválidos' });
 
-    const fx = await createPaymentIntent({ amount, currency, userRef: userId });
+    const bp = await createPaymentIntent({ amount, currency, userRef: userId });
     await pool.query(
       `insert into payments (id, type, user_id, amount, currency, status, raw)
        values ($1, 'payment', $2, $3, $4, $5, $6)`,
-      [fx.id, userId, amount, currency, 'pending', fx]
+      [bp.id, userId, amount, currency, bp.status || 'pending', bp]
     );
 
-    res.json({ intentId: fx.id, checkoutUrl: fx.checkoutUrl });
+    res.json({
+      intentId: bp.id,
+      status: bp.status,
+      pixCopiaCola: bp.pixCopiaCola,
+      pixQrCode: bp.pixQrCode
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Saque
+// Saque (BullsPay)
 app.post('/api/payouts/request', async (req, res) => {
   try {
     const { userId, amount, destination, currency = 'BRL' } = req.body;
@@ -118,38 +123,34 @@ app.post('/api/payouts/request', async (req, res) => {
       return res.status(400).json({ error: 'saldo insuficiente' });
 
     await hold(userId, amount);
-    const fx = await createPayout({ amount, currency, userRef: userId, destination });
+    const bp = await createPayout({ amount, currency, userRef: userId, destination });
 
     await pool.query(
       `insert into payments (id, type, user_id, amount, currency, status, raw)
        values ($1, 'payout', $2, $3, $4, $5, $6)`,
-      [fx.id, userId, amount, currency, fx.status || 'processing', fx]
+      [bp.id, userId, amount, currency, bp.status || 'processing', bp]
     );
 
-    res.json({ payoutId: fx.id, status: fx.status || 'processing' });
+    res.json({ payoutId: bp.id, status: bp.status || 'processing' });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Webhook
-app.post('/api/webhooks/fxpay', async (req, res) => {
+// Webhook BullsPay
+app.post('/api/webhooks/bullspay', async (req, res) => {
   try {
-    if (!verifyWebhook(req))
-      return res.status(401).json({ error: 'assinatura inválida' });
     const event = req.body;
 
-    const exists = await pool.query(
-      "select 1 from payments where id=$1",
-      [event.id]
-    );
+    // Atualiza ou insere pagamento
+    const exists = await pool.query("select 1 from payments where id=$1", [event.id]);
     if (exists.rowCount === 0) {
       await pool.query(
         `insert into payments (id, type, user_id, amount, currency, status, raw)
          values ($1, $2, $3, $4, $5, $6, $7)`,
         [
           event.id,
-          event.type.includes('payout') ? 'payout' : 'payment',
+          event.type && event.type.includes('payout') ? 'payout' : 'payment',
           event.userRef,
           event.amount,
           event.currency,
@@ -164,11 +165,12 @@ app.post('/api/webhooks/fxpay', async (req, res) => {
       );
     }
 
-    if (event.type === 'payment.succeeded') {
+    // Credita ou libera saldo conforme status
+    if (event.status === 'paid' || event.status === 'payment.succeeded') {
       await credit(event.userRef, event.amount);
-    } else if (event.type === 'payout.succeeded') {
+    } else if (event.status === 'payout.succeeded') {
       await releaseHold(event.userRef, event.amount, true);
-    } else if (event.type === 'payout.failed') {
+    } else if (event.status === 'payout.failed') {
       await releaseHold(event.userRef, event.amount, false);
     }
 
