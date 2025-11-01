@@ -31,19 +31,24 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
 
   const data = await resp.json();
 
+  // Log para debug (veja no Render)
+  console.log("Resposta BullsPay:", data);
+
+  // Normaliza os campos para o front
   return {
-    gateway_id: data.data.unic_id,   // <-- renomeado para não conflitar com o id do banco
-    status: data.data.status,
-    pixCopiaCola: data.data.qr_code_text,
-    pixQrCode: `data:image/png;base64,${data.data.qr_code_base64}`,
-    checkoutUrl: data.data.payment_url,
+    gateway_id: data.data?.unic_id || null,
+    status: data.data?.status || 'pending',
+    pixQrCode: data.data?.pixQrCode || data.data?.qr_code_url || null,
+    qr_code_base64: data.data?.qr_code_base64 || data.data?.qrCodeBase64 || null,
+    pixCopiaCola: data.data?.pixCopiaCola || data.data?.qr_code_text || data.data?.pixCopiaECola || null,
+    checkoutUrl: data.data?.checkoutUrl || data.data?.url || null,
     raw: data
   };
 }
 
 // Criação de saque (payout)
 export async function createPayout({ amount, currency, userRef, destination }) {
-  const resp = await fetch('https://api-gateway.bullspay.com.br/api/withdrawals/request', {
+  const resp = await fetch('https://api-gateway.bullspay.com.br/api/transactions/payout', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -55,8 +60,8 @@ export async function createPayout({ amount, currency, userRef, destination }) {
       amount,
       currency: currency || 'BRL',
       external_id: `${userRef}-${Date.now()}`,
-      destination,
-      callbackUrl: `${process.env.PUBLIC_BASE_URL}/api/webhooks/bullspay`
+      payment_method: "pix",
+      destination
     })
   });
 
@@ -67,9 +72,11 @@ export async function createPayout({ amount, currency, userRef, destination }) {
 
   const data = await resp.json();
 
+  console.log("Resposta BullsPay (payout):", data);
+
   return {
-    gateway_id: data.data.unic_id,   // <-- também renomeado
-    status: data.data.status,
+    gateway_id: data.data?.unic_id || null,
+    status: data.data?.status || 'pending',
     raw: data
   };
-    }
+      }
