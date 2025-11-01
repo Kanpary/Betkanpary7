@@ -32,11 +32,12 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
   const data = await resp.json();
 
   return {
-    id: data.data.unic_id,
+    gateway_id: data.data.unic_id,   // <-- renomeado para não conflitar com o id do banco
     status: data.data.status,
     pixCopiaCola: data.data.qr_code_text,
     pixQrCode: `data:image/png;base64,${data.data.qr_code_base64}`,
-    checkoutUrl: data.data.payment_url
+    checkoutUrl: data.data.payment_url,
+    raw: data
   };
 }
 
@@ -67,8 +68,8 @@ export async function createPayout({ amount, currency, userRef, destination }) {
   const data = await resp.json();
 
   return {
-    id: data.data.unic_id,
+    gateway_id: data.data.unic_id,   // <-- também renomeado
     status: data.data.status,
     raw: data
   };
-}
+    }
