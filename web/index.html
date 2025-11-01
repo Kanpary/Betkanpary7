@@ -52,7 +52,7 @@
 
 <script>
 // Use rota relativa, pois o HTML já é servido pelo mesmo backend
-const API = ''; 
+const API = '';
 
 let userId = null;
 
@@ -74,12 +74,14 @@ async function wallet() {
   if (!userId) return alert('Faça login');
   const r = await fetch(`${API}/api/wallet/${userId}`);
   const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
   document.getElementById('wallet').innerText = `Saldo: R$ ${j.balance} | Hold: R$ ${j.hold}`;
 }
 
 async function deposit() {
   if (!userId) return alert('Faça login');
   const amount = Number(document.getElementById('depAmount').value);
+  if (!amount || amount <= 0) return alert('Informe um valor válido');
   const r = await fetch(`${API}/api/payments/deposit-intent`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -87,13 +89,16 @@ async function deposit() {
   });
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro no depósito');
-  document.getElementById('dep').innerHTML = `Intent: ${j.intentId}<br><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a>`;
+  document.getElementById('dep').innerHTML =
+    `Intent: ${j.intentId}<br><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a>`;
 }
 
 async function withdraw() {
   if (!userId) return alert('Faça login');
   const amount = Number(document.getElementById('saqAmount').value);
-  const destination = document.getElementById('dest').value;
+  const destination = document.getElementById('dest').value.trim();
+  if (!amount || amount <= 0) return alert('Informe um valor válido');
+  if (!destination) return alert('Informe o destino');
   const r = await fetch(`${API}/api/payouts/request`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -107,6 +112,7 @@ async function withdraw() {
 async function bet() {
   if (!userId) return alert('Faça login');
   const amount = Number(document.getElementById('betAmount').value);
+  if (!amount || amount <= 0) return alert('Informe um valor válido');
   const betType = document.getElementById('betType').value;
   const raw = document.getElementById('betValue').value;
   const betValue = betType === 'number' ? Number(raw) : raw;
@@ -117,7 +123,8 @@ async function bet() {
   });
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro na aposta');
-  document.getElementById('bet').innerText = `Resultado: ${j.result} (${j.color}) | ${j.win ? 'Ganhou' : 'Perdeu'} | Pagou: R$ ${j.payout}`;
+  document.getElementById('bet').innerText =
+    `Resultado: ${j.result} (${j.color}) | ${j.win ? 'Ganhou' : 'Perdeu'} | Pagou: R$ ${j.payout}`;
   wallet();
 }
 </script>
