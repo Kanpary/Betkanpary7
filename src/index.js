@@ -80,7 +80,7 @@ app.get('/wallet/:userId', async (req, res) => {
   }
 });
 
-// Rota para criar um depósito (payment intent)
+// ✅ Rota para criar um depósito (payment intent)
 app.post('/deposit', async (req, res) => {
   try {
     const { email, amount, currency } = req.body;
@@ -100,7 +100,7 @@ app.post('/deposit', async (req, res) => {
         userId,
         amount,
         currency || 'BRL',
-        'pix',
+        'deposit', // ✅ corrigido: antes estava 'pix'
         paymentData.status,
         JSON.stringify(paymentData)
       ]
@@ -113,7 +113,7 @@ app.post('/deposit', async (req, res) => {
   }
 });
 
-// Rota para criar um saque (payout)
+// ✅ Rota para criar um saque (payout)
 app.post('/payout', async (req, res) => {
   try {
     const { email, amount, currency, destination } = req.body;
