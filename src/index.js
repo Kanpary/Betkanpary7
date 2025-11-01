@@ -8,7 +8,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool, init } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
-import CryptoJS from 'crypto-js';
 import { createPaymentIntent, createPayout } from './bullspay.js';
 
 dotenv.config();
@@ -44,6 +43,42 @@ async function getOrCreateUser(email) {
 
   return userId;
 }
+
+// ✅ Rota de login
+app.post('/login', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'E-mail é obrigatório' });
+    }
+
+    const userId = await getOrCreateUser(email);
+    res.json({ userId, email });
+  } catch (err) {
+    console.error('Erro no login:', err);
+    res.status(500).json({ error: 'Erro interno no login' });
+  }
+});
+
+// ✅ Rota para consultar carteira
+app.get('/wallet/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const result = await pool.query(
+      'SELECT balance, hold FROM wallets WHERE user_id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Carteira não encontrada' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erro ao buscar carteira:', err);
+    res.status(500).json({ error: 'Erro interno ao buscar carteira' });
+  }
+});
 
 // Rota para criar um depósito (payment intent)
 app.post('/deposit', async (req, res) => {
