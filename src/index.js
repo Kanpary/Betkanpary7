@@ -19,7 +19,7 @@ await init();
 
 // Configuração para servir arquivos estáticos da pasta "web"
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-app.use(express.static(path.join(__dirname, 'web')));
+app.use(express.static(path.join(__dirname, '..', 'web')));
 
 // Helpers
 async function getOrCreateUser(email) {
