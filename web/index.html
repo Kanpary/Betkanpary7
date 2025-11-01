@@ -7,6 +7,7 @@
   <style>
     body { font-family: sans-serif; margin: 20px }
     .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 12px }
+    textarea { width: 100%; }
   </style>
 </head>
 <body>
@@ -89,8 +90,18 @@ async function deposit() {
   });
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro no depósito');
-  document.getElementById('dep').innerHTML =
-    `Intent: ${j.intentId}<br><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a>`;
+
+  let html = `Intent: ${j.intentId}<br>Status: ${j.status || 'pending'}`;
+  if (j.pixQrCode) {
+    html += `<br><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px">`;
+  }
+  if (j.pixCopiaCola) {
+    html += `<br><textarea readonly>${j.pixCopiaCola}</textarea>`;
+  }
+  if (j.checkoutUrl) {
+    html += `<br><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a>`;
+  }
+  document.getElementById('dep').innerHTML = html;
 }
 
 async function withdraw() {
