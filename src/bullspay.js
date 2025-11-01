@@ -7,15 +7,16 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'X-Public-Key': process.env.BULLSPAY_PUBLIC_KEY,
-      'X-Private-Key': process.env.BULLSPAY_PRIVATE_KEY
+      'X-Client-Id': process.env.BULLSPAY_CLIENT_ID,
+      'X-Secret-Key': process.env.BULLSPAY_API_KEY
     },
     body: JSON.stringify({
       amount, // em centavos (ex: R$ 10,00 = 1000)
+      currency,
       external_id: userRef,
       payment_method: "pix",
       buyer_infos: {
-        buyer_name: "Usuário",
+        buyer_name: "Usuário Teste",
         buyer_email: "teste@example.com",
         buyer_document: "00000000000",
         buyer_phone: "11999999999"
@@ -43,13 +44,13 @@ export async function createPayout({ amount, currency, userRef, destination }) {
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'X-Public-Key': process.env.BULLSPAY_PUBLIC_KEY,
-      'X-Private-Key': process.env.BULLSPAY_PRIVATE_KEY
+      'X-Client-Id': process.env.BULLSPAY_CLIENT_ID,
+      'X-Secret-Key': process.env.BULLSPAY_API_KEY
     },
     body: JSON.stringify({
       amount,
-      external_id: userRef,
       currency,
+      external_id: userRef,
       destination,
       callbackUrl: `${process.env.PUBLIC_BASE_URL}/api/webhooks/bullspay`
     })
