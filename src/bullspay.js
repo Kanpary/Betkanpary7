@@ -1,6 +1,5 @@
 // bullspay.js
 
-// Criação de pagamento Pix
 export async function createPaymentIntent({ amount, currency, userRef }) {
   const resp = await fetch('https://api-gateway.bullspay.com.br/api/transactions/create', {
     method: 'POST',
@@ -11,7 +10,7 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
       'X-Secret-Key': process.env.BULLSPAY_API_KEY
     },
     body: JSON.stringify({
-      amount, // em centavos (ex: R$ 10,00 = 1000)
+      amount, // em centavos
       currency,
       external_id: userRef,
       payment_method: "pix",
@@ -37,7 +36,6 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
   };
 }
 
-// Criação de saque (payout)
 export async function createPayout({ amount, currency, userRef, destination }) {
   const resp = await fetch('https://api-gateway.bullspay.com.br/api/withdrawals/request', {
     method: 'POST',
