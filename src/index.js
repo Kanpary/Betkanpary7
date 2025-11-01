@@ -148,6 +148,7 @@ app.post('/api/webhooks/fxpay', async (req, res) => {
 
 // Jogo roleta simples
 const SERVER_SEED = 'troque-por-semente-segura';
+
 function rng(serverSeed, clientSeed, nonce) {
   const mix = `${serverSeed}:${clientSeed}:${nonce}`;
   const hash = CryptoJS.SHA256(mix).toString();
@@ -181,4 +182,17 @@ app.post('/api/games/roulette/bet', async (req, res) => {
     [uuidv4(), userId, amount, betType, String(betValue), result, color, payout, CryptoJS.SHA256(SERVER_SEED).toString(), clientSeed, nonce]);
   await pool.query('commit');
 
-  res.json({ result, color, win: payout > 0, payout,
+  res.json({
+    result,
+    color,
+    win: payout > 0,
+    payout,
+    serverSeedHash: CryptoJS.SHA256(SERVER_SEED).toString(),
+    clientSeed,
+    nonce
+  });
+});
+
+// Inicializa servidor
+const port = process.env.PORT || 8080;
+app.listen(port, () => console.log(`API on ${port}`));
