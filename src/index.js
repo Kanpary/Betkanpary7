@@ -18,8 +18,8 @@ app.use(bodyParser.json());
 await init();
 
 // Configuração para servir arquivos estáticos da pasta "web"
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-app.use(express.static(path.join(__dirname, '..', 'web')));
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(dirname, '..', 'web')));
 
 // Helpers
 async function getOrCreateUser(email) {
@@ -38,16 +38,16 @@ async function getOrCreateUser(email) {
 }
 
 async function getWallet(userId) {
-  const r = await pool.query(`select balance, hold from wallets where user_id=$1`, [userId]);
+  const r = await pool.query(select balance, hold from wallets where user_id=$1, [userId]);
   return r.rows[0];
 }
 
 async function credit(userId, amount) {
-  await pool.query(`update wallets set balance = balance + $2 where user_id=$1`, [userId, amount]);
+  await pool.query(update wallets set balance = balance + $2 where user_id=$1, [userId, amount]);
 }
 
 async function hold(userId, amount) {
-  await pool.query(`update wallets set balance = balance - $2, hold = hold + $2 where user_id=$1`, [userId, amount]);
+  await pool.query(update wallets set balance = balance - $2, hold = hold + $2 where user_id=$1, [userId, amount]);
 }
 
 async function releaseHold(userId, amount, confirmDebit = true) {
@@ -121,14 +121,14 @@ app.post('/api/webhooks/fxpay', async (req, res) => {
     const event = req.body; // { type, id, userRef, amount, currency, status }
 
     // idempotência
-    const exists = await pool.query(`select 1 from payments where id=$1`, [event.id]);
+    const exists = await pool.query(select 1 from payments where id=$1, [event.id]);
     if (exists.rowCount === 0) {
       await pool.query(`insert into payments (id, type, user_id, amount, currency, status, raw)
                         values ($1, $2, $3, $4, $5, $6, $7)`,
         [event.id, event.type.includes('payout') ? 'payout' : 'payment',
          event.userRef, event.amount, event.currency, event.status, event]);
     } else {
-      await pool.query(`update payments set status=$2, raw=$3 where id=$1`, [event.id, event.status, event]);
+      await pool.query(update payments set status=$2, raw=$3 where id=$1, [event.id, event.status, event]);
     }
 
     // atualizar carteira
@@ -150,13 +150,13 @@ app.post('/api/webhooks/fxpay', async (req, res) => {
 const SERVER_SEED = 'troque-por-semente-segura';
 
 function rng(serverSeed, clientSeed, nonce) {
-  const mix = `${serverSeed}:${clientSeed}:${nonce}`;
+  const mix = ${serverSeed}:${clientSeed}:${nonce};
   const hash = CryptoJS.SHA256(mix).toString();
   return parseInt(hash.slice(0, 8), 16) % 37; // 0-36
 }
 
 app.post('/api/games/roulette/bet', async (req, res) => {
-  const { userId, amount, betType, betValue, clientSeed = 'web', nonce = `${Date.now()}` } = req.body;
+  const { userId, amount, betType, betValue, clientSeed = 'web', nonce = ${Date.now()} } = req.body;
   if (!userId || !amount || amount <= 0) return res.status(400).json({ error: 'parâmetros inválidos' });
   if (!['number', 'color'].includes(betType)) return res.status(400).json({ error: 'tipo inválido' });
 
@@ -164,7 +164,7 @@ app.post('/api/games/roulette/bet', async (req, res) => {
   if (!w || Number(w.balance) < amount) return res.status(400).json({ error: 'saldo insuficiente' });
 
   await pool.query('begin');
-  await pool.query(`update wallets set balance = balance - $2 where user_id=$1`, [userId, amount]);
+  await pool.query(update wallets set balance = balance - $2 where user_id=$1, [userId, amount]);
 
   const result = rng(SERVER_SEED, clientSeed, nonce);
   const color = (result === 0) ? 'green' : (result % 2 === 0 ? 'black' : 'red');
@@ -174,10 +174,10 @@ app.post('/api/games/roulette/bet', async (req, res) => {
   if (betType === 'color' && betValue === color) payout = amount * 2;
 
   if (payout > 0) {
-    await pool.query(`update wallets set balance = balance + $2 where user_id=$1`, [userId, payout]);
+    await pool.query(update wallets set balance = balance + $2 where user_id=$1, [userId, payout]);
   }
 
-  await pool.query(`insert into rounds (id, user_id, bet_amount, bet_type, bet_value, result, color, payout, server_seed_hash, client_seed, nonce)
+  await pool.query(`insert into rounds (id, userid, betamount, bettype, betvalue, result, color, payout, serverseedhash, client_seed, nonce)
                     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
     [uuidv4(), userId, amount, betType, String(betValue), result, color, payout, CryptoJS.SHA256(SERVER_SEED).toString(), clientSeed, nonce]);
   await pool.query('commit');
@@ -195,4 +195,4 @@ app.post('/api/games/roulette/bet', async (req, res) => {
 
 // Inicializa servidor
 const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`API on ${port}`));
+app.listen(port, () => console.log(API on ${port}));
