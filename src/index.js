@@ -100,7 +100,7 @@ app.post('/deposit', async (req, res) => {
         userId,
         amount,
         currency || 'BRL',
-        'deposit', // ✅ corrigido: antes estava 'pix'
+        'deposit', // ✅ corrigido: agora bate com a constraint do banco
         paymentData.status,
         JSON.stringify(paymentData)
       ]
