@@ -26,7 +26,7 @@
 
   <div class="card">
     <h3>Depósito</h3>
-    <input id="depAmount" type="number" value="50">
+    <input id="depAmount" type="number" value="50" min="5">
     <button onclick="deposit()">Depositar</button>
     <div id="dep"></div>
   </div>
@@ -52,7 +52,6 @@
   </div>
 
 <script>
-// Use rota relativa, pois o HTML já é servido pelo mesmo backend
 const API = '';
 
 let userId = null;
@@ -81,8 +80,9 @@ async function wallet() {
 
 async function deposit() {
   if (!userId) return alert('Faça login');
-  const amount = Number(document.getElementById('depAmount').value);
-  if (!amount || amount <= 0) return alert('Informe um valor válido');
+  const reais = Number(document.getElementById('depAmount').value);
+  if (!reais || reais < 5) return alert('O valor mínimo para depósito é R$ 5,00');
+  const amount = Math.floor(reais * 100); // converte para centavos
   const r = await fetch(`${API}/api/payments/deposit-intent`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -106,10 +106,11 @@ async function deposit() {
 
 async function withdraw() {
   if (!userId) return alert('Faça login');
-  const amount = Number(document.getElementById('saqAmount').value);
+  const reais = Number(document.getElementById('saqAmount').value);
   const destination = document.getElementById('dest').value.trim();
-  if (!amount || amount <= 0) return alert('Informe um valor válido');
+  if (!reais || reais <= 0) return alert('Informe um valor válido');
   if (!destination) return alert('Informe o destino');
+  const amount = Math.floor(reais * 100); // centavos
   const r = await fetch(`${API}/api/payouts/request`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
