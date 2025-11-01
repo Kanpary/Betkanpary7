@@ -1,3 +1,5 @@
+// index.js
+
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -7,9 +9,10 @@ import { fileURLToPath } from 'url';
 import { pool, init } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
-import { createPaymentIntent, createPayout } from './bullspay.js'; // <-- trocado para BullsPay
+import { createPaymentIntent, createPayout } from './bullspay.js';
 
 dotenv.config();
+
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
@@ -25,239 +28,97 @@ app.use(express.static(path.join(__dirname, '..', 'web')));
 async function getOrCreateUser(email) {
   const id = uuidv4();
   const up = await pool.query(
-    `insert into users (id, email) values ($1, $2)
-     on conflict (email) do update set email = excluded.email
-     returning id`, [id, email]
+    `INSERT INTO users (id, email) VALUES ($1, $2)
+     ON CONFLICT (email) DO UPDATE SET email = EXCLUDED.email
+     RETURNING id`,
+    [id, email]
   );
+
   const userId = up.rows[0].id;
+
   await pool.query(
-    `insert into wallets (user_id) values ($1)
-     on conflict (user_id) do nothing`, [userId]
+    `INSERT INTO wallets (user_id) VALUES ($1)
+     ON CONFLICT (user_id) DO NOTHING`,
+    [userId]
   );
+
   return userId;
 }
 
-async function getWallet(userId) {
-  const r = await pool.query(
-    "select balance, hold from wallets where user_id=$1",
-    [userId]
-  );
-  return r.rows[0];
-}
-
-async function credit(userId, amount) {
-  await pool.query(
-    "update wallets set balance = balance + $2 where user_id=$1",
-    [userId, amount]
-  );
-}
-
-async function hold(userId, amount) {
-  await pool.query(
-    "update wallets set balance = balance - $2, hold = hold + $2 where user_id=$1",
-    [userId, amount]
-  );
-}
-
-async function releaseHold(userId, amount, confirmDebit = true) {
-  await pool.query(
-    `update wallets
-       set hold = hold - $2,
-           balance = balance + (case when $3 then 0 else $2 end)
-     where user_id=$1`,
-    [userId, amount, confirmDebit]
-  );
-}
-
-// Health
-app.get('/health', (_, res) => res.json({ ok: true }));
-
-// Auth demo
-app.post('/api/demo/login', async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'email obrigatório' });
-  const userId = await getOrCreateUser(email);
-  res.json({ userId, email });
-});
-
-// Wallet
-app.get('/api/wallet/:userId', async (req, res) => {
-  const w = await getWallet(req.params.userId);
-  res.json(w || { balance: 0, hold: 0 });
-});
-
-// Depósito (BullsPay)
-app.post('/api/payments/deposit-intent', async (req, res) => {
+// Rota para criar um depósito (payment intent)
+app.post('/deposit', async (req, res) => {
   try {
-    const { userId, amount, currency = 'BRL' } = req.body;
-    if (!userId || !amount || amount <= 0)
-      return res.status(400).json({ error: 'parâmetros inválidos' });
+    const { email, amount, currency } = req.body;
 
-    const bp = await createPaymentIntent({ amount, currency, userRef: userId });
-    await pool.query(
-      `insert into payments (id, type, user_id, amount, currency, status, raw)
-       values ($1, 'payment', $2, $3, $4, $5, $6)`,
-      [bp.id, userId, amount, currency, bp.status || 'pending', bp]
-    );
+    // garante que o usuário existe
+    const userId = await getOrCreateUser(email);
 
-    res.json({
-      intentId: bp.id,
-      status: bp.status,
-      pixCopiaCola: bp.pixCopiaCola,
-      pixQrCode: bp.pixQrCode
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Saque (BullsPay)
-app.post('/api/payouts/request', async (req, res) => {
-  try {
-    const { userId, amount, destination, currency = 'BRL' } = req.body;
-    if (!userId || !amount || amount <= 0 || !destination)
-      return res.status(400).json({ error: 'parâmetros inválidos' });
-
-    const w = await getWallet(userId);
-    if (!w || Number(w.balance) < amount)
-      return res.status(400).json({ error: 'saldo insuficiente' });
-
-    await hold(userId, amount);
-    const bp = await createPayout({ amount, currency, userRef: userId, destination });
-
-    await pool.query(
-      `insert into payments (id, type, user_id, amount, currency, status, raw)
-       values ($1, 'payout', $2, $3, $4, $5, $6)`,
-      [bp.id, userId, amount, currency, bp.status || 'processing', bp]
-    );
-
-    res.json({ payoutId: bp.id, status: bp.status || 'processing' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Webhook BullsPay
-app.post('/api/webhooks/bullspay', async (req, res) => {
-  try {
-    const event = req.body;
-
-    // Atualiza ou insere pagamento
-    const exists = await pool.query("select 1 from payments where id=$1", [event.id]);
-    if (exists.rowCount === 0) {
-      await pool.query(
-        `insert into payments (id, type, user_id, amount, currency, status, raw)
-         values ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          event.id,
-          event.type && event.type.includes('payout') ? 'payout' : 'payment',
-          event.userRef,
-          event.amount,
-          event.currency,
-          event.status,
-          event
-        ]
-      );
-    } else {
-      await pool.query(
-        "update payments set status=$2, raw=$3 where id=$1",
-        [event.id, event.status, event]
-      );
-    }
-
-    // Credita ou libera saldo conforme status
-    if (event.status === 'paid' || event.status === 'payment.succeeded') {
-      await credit(event.userRef, event.amount);
-    } else if (event.status === 'payout.succeeded') {
-      await releaseHold(event.userRef, event.amount, true);
-    } else if (event.status === 'payout.failed') {
-      await releaseHold(event.userRef, event.amount, false);
-    }
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Roleta
-const SERVER_SEED = 'troque-por-semente-segura';
-
-function rng(serverSeed, clientSeed, nonce) {
-  const mix = `${serverSeed}:${clientSeed}:${nonce}`;
-  const hash = CryptoJS.SHA256(mix).toString();
-  return parseInt(hash.slice(0, 8), 16) % 37;
-}
-
-app.post('/api/games/roulette/bet', async (req, res) => {
-  const {
-    userId,
-    amount,
-    betType,
-    betValue,
-    clientSeed = 'web',
-    nonce = `${Date.now()}`
-  } = req.body;
-
-  if (!userId || !amount || amount <= 0)
-    return res.status(400).json({ error: 'parâmetros inválidos' });
-  if (!['number', 'color'].includes(betType))
-    return res.status(400).json({ error: 'tipo inválido' });
-
-  const w = await getWallet(userId);
-  if (!w || Number(w.balance) < amount)
-    return res.status(400).json({ error: 'saldo insuficiente' });
-
-  await pool.query('begin');
-  await pool.query(
-    "update wallets set balance = balance - $2 where user_id=$1",
-    [userId, amount]
-  );
-
-  const result = rng(SERVER_SEED, clientSeed, nonce);
-  const color = result === 0 ? 'green' : result % 2 === 0 ? 'black' : 'red';
-
-  let payout = 0;
-  if (betType === 'number' && Number(betValue) === result) payout = amount * 36;
-  if (betType === 'color' && betValue === color) payout = amount * 2;
-
-  if (payout > 0) {
-    await pool.query(
-      "update wallets set balance = balance + $2 where user_id=$1",
-      [userId, payout]
-    );
-  }
-
-  await pool.query(
-    `insert into rounds (id, user_id, bet_amount, bet_type, bet_value, result, color, payout, server_seed_hash, client_seed, nonce)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-    [
-      uuidv4(),
-      userId,
+    // chama a BullsPay para criar o pagamento Pix
+    const paymentData = await createPaymentIntent({
       amount,
-      betType,
-      String(betValue),
-      result,
-      color,
-      payout,
-      CryptoJS.SHA256(SERVER_SEED).toString(),
-      clientSeed,
-      nonce
-    ]
-  );
-  await pool.query('commit');
+      currency,
+      userRef: userId
+    });
 
-  res.json({
-    result,
-    color,
-    win: payout > 0,
-    payout,
-    serverSeedHash: CryptoJS.SHA256(SERVER_SEED).toString(),
-    clientSeed,
-    nonce
-  });
+    // insere no banco (sem passar id!)
+    await pool.query(
+      `INSERT INTO payments (user_id, amount, currency, type, status, raw)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        userId,
+        amount,
+        currency || 'BRL',
+        'pix',
+        paymentData.status,
+        JSON.stringify(paymentData)
+      ]
+    );
+
+    res.json(paymentData);
+  } catch (err) {
+    console.error('Erro no depósito:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Inicializa servidor
-const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`API on ${port}`));
+// Rota para criar um saque (payout)
+app.post('/payout', async (req, res) => {
+  try {
+    const { email, amount, currency, destination } = req.body;
+
+    const userId = await getOrCreateUser(email);
+
+    const payoutData = await createPayout({
+      amount,
+      currency,
+      userRef: userId,
+      destination
+    });
+
+    // insere no banco (sem passar id!)
+    await pool.query(
+      `INSERT INTO payments (user_id, amount, currency, type, status, raw)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        userId,
+        amount,
+        currency || 'BRL',
+        'payout',
+        payoutData.status,
+        JSON.stringify(payoutData)
+      ]
+    );
+
+    res.json(payoutData);
+  } catch (err) {
+    console.error('Erro no saque:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Inicialização do servidor
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
