@@ -60,21 +60,18 @@ async function login() {
   const email = document.getElementById('email').value.trim();
   if (!email) return alert('Informe seu e-mail');
 
-  // como não existe /api/demo/login no backend, vamos apenas simular criando o usuário
-  const r = await fetch(`${API}/deposit`, {
+  // agora chamamos a rota /login do backend
+  const r = await fetch(`${API}/login`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email, amount: 0 })
+    body: JSON.stringify({ email })
   });
 
-  if (!r.ok) {
-    const j = await r.json();
-    return alert(j.error || 'Erro no login');
-  }
+  const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro no login');
 
-  // aqui só guardamos o email como referência
-  userId = email;
-  document.getElementById('user').innerText = `User: ${email}`;
+  userId = j.userId;
+  document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
 }
 
 async function wallet() {
