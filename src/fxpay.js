@@ -2,12 +2,11 @@
 import CryptoJS from 'crypto-js';
 
 // Verifica a assinatura do webhook (se o FXPay enviar header x-fxpay-signature).
-// Caso o FXPay não envie assinatura, você pode simplesmente retornar true
-// e validar a transação consultando a API com client_id + secret.
+// Caso o FXPay não envie assinatura, aceitamos e validamos depois via API.
 export function verifyWebhook(req) {
   const provided = req.headers['x-fxpay-signature'] || '';
   if (!provided) {
-    // Sem assinatura → aceita provisoriamente, valida depois via API
+    // Sem assinatura → aceita provisoriamente
     return true;
   }
 
@@ -61,22 +60,28 @@ export async function createPayout({ amount, currency, userRef, destination }) {
 
 // Consulta status de um pagamento
 export async function fetchPaymentStatus(id) {
-  const resp = await fetch(`https://api.fxpay.com/v1/payments/status?id=${id}&client_id=${process.env.FXPAY_CLIENT_ID}`, {
-    headers: {
-      'Authorization': `Bearer ${process.env.FXPAY_API_KEY}`
+  const resp = await fetch(
+    `https://api.fxpay.com/v1/payments/status?id=${id}&client_id=${process.env.FXPAY_CLIENT_ID}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${process.env.FXPAY_API_KEY}`
+      }
     }
-  });
+  );
   if (!resp.ok) throw new Error(`FXPay status error ${resp.status}`);
   return await resp.json();
 }
 
 // Consulta status de um payout
 export async function fetchPayoutStatus(id) {
-  const resp = await fetch(`https://api.fxpay.com/v1/payouts/status?id=${id}&client_id=${process.env.FXPAY_CLIENT_ID}`, {
-    headers: {
-      'Authorization': `Bearer ${process.env.FXPAY_API_KEY}`
+  const resp = await fetch(
+    `https://api.fxpay.com/v1/payouts/status?id=${id}&client_id=${process.env.FXPAY_CLIENT_ID}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${process.env.FXPAY_API_KEY}`
+      }
     }
-  });
+  );
   if (!resp.ok) throw new Error(`FXPay payout status error ${resp.status}`);
   return await resp.json();
-}
+  }
