@@ -93,6 +93,17 @@ app.post('/deposit', async (req, res) => {
       userRef: userId
     });
 
+    console.log('Resposta BullsPay:', paymentData);
+
+    // Normaliza os campos para sempre devolver QR e Copia e Cola
+    const qrCodeUrl = paymentData.pixQrCode || null;
+    const qrCodeBase64 = paymentData.qr_code_base64 || null;
+    const copiaCola =
+      paymentData.pixCopiaCola ||
+      paymentData.qr_code_text ||
+      paymentData.pixCopiaECola ||
+      null;
+
     await pool.query(
       `INSERT INTO payments (user_id, amount, currency, type, status, raw)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -100,13 +111,19 @@ app.post('/deposit', async (req, res) => {
         userId,
         amount,
         currency || 'BRL',
-        'deposit', // ✅ corrigido: agora bate com a constraint do banco
+        'deposit',
         paymentData.status,
         JSON.stringify(paymentData)
       ]
     );
 
-    res.json(paymentData);
+    res.json({
+      status: paymentData.status,
+      pixQrCode: qrCodeUrl,
+      qr_code_base64: qrCodeBase64,
+      pixCopiaCola: copiaCola,
+      checkoutUrl: paymentData.checkoutUrl || null
+    });
   } catch (err) {
     console.error('Erro no depósito:', err);
     res.status(500).json({ error: err.message });
