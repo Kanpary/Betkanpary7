@@ -4,10 +4,14 @@
   <meta charset="utf-8">
   <title>FXPay Cassino</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>body{font-family:sans-serif;margin:20px} .card{border:1px solid #ddd;padding:12px;border-radius:8px;margin-bottom:12px}</style>
+  <style>
+    body { font-family: sans-serif; margin: 20px }
+    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 12px }
+  </style>
 </head>
 <body>
   <h1>FXPay Cassino</h1>
+
   <div class="card">
     <input id="email" placeholder="Seu e-mail">
     <button onclick="login()">Entrar</button>
@@ -37,22 +41,33 @@
   <div class="card">
     <h3>Roleta</h3>
     <input id="betAmount" type="number" value="5">
-    <select id="betType"><option value="color">Cor</option><option value="number">Número</option></select>
+    <select id="betType">
+      <option value="color">Cor</option>
+      <option value="number">Número</option>
+    </select>
     <input id="betValue" placeholder="red/black/green ou 0-36" value="red">
     <button onclick="bet()">Apostar</button>
     <div id="bet"></div>
   </div>
 
 <script>
-const API = 'https://sua-api.com'; // troque para seu domínio
+// Use rota relativa, pois o HTML já é servido pelo mesmo backend
+const API = ''; 
 
 let userId = null;
+
 async function login() {
-  const email = document.getElementById('email').value;
-  const r = await fetch(`${API}/api/demo/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email })});
+  const email = document.getElementById('email').value.trim();
+  if (!email) return alert('Informe seu e-mail');
+  const r = await fetch(`${API}/api/demo/login`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ email })
+  });
   const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro no login');
   userId = j.userId;
-  document.getElementById('user').innerText = `User: ${userId}`;
+  document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
 }
 
 async function wallet() {
@@ -65,8 +80,13 @@ async function wallet() {
 async function deposit() {
   if (!userId) return alert('Faça login');
   const amount = Number(document.getElementById('depAmount').value);
-  const r = await fetch(`${API}/api/payments/deposit-intent`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId, amount })});
+  const r = await fetch(`${API}/api/payments/deposit-intent`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ userId, amount })
+  });
   const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro no depósito');
   document.getElementById('dep').innerHTML = `Intent: ${j.intentId}<br><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a>`;
 }
 
@@ -74,8 +94,13 @@ async function withdraw() {
   if (!userId) return alert('Faça login');
   const amount = Number(document.getElementById('saqAmount').value);
   const destination = document.getElementById('dest').value;
-  const r = await fetch(`${API}/api/payouts/request`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId, amount, destination })});
+  const r = await fetch(`${API}/api/payouts/request`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ userId, amount, destination })
+  });
   const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro no saque');
   document.getElementById('saq').innerText = `Payout: ${j.payoutId} (${j.status})`;
 }
 
@@ -85,8 +110,13 @@ async function bet() {
   const betType = document.getElementById('betType').value;
   const raw = document.getElementById('betValue').value;
   const betValue = betType === 'number' ? Number(raw) : raw;
-  const r = await fetch(`${API}/api/games/roulette/bet`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId, amount, betType, betValue })});
+  const r = await fetch(`${API}/api/games/roulette/bet`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ userId, amount, betType, betValue })
+  });
   const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro na aposta');
   document.getElementById('bet').innerText = `Resultado: ${j.result} (${j.color}) | ${j.win ? 'Ganhou' : 'Perdeu'} | Pagou: R$ ${j.payout}`;
   wallet();
 }
