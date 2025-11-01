@@ -60,7 +60,6 @@ async function login() {
   const email = document.getElementById('email').value.trim();
   if (!email) return alert('Informe seu e-mail');
 
-  // agora chamamos a rota /login do backend
   const r = await fetch(`${API}/login`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -76,8 +75,10 @@ async function login() {
 
 async function wallet() {
   if (!userId) return alert('Faça login');
-  // você ainda precisa implementar a rota GET /wallet/:userId no backend
-  alert('A rota de carteira ainda não foi implementada no backend.');
+  const r = await fetch(`${API}/wallet/${userId}`);
+  const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
+  document.getElementById('wallet').innerText = `Saldo: R$ ${(j.balance/100).toFixed(2)} | Em processamento: R$ ${(j.hold/100).toFixed(2)}`;
 }
 
 async function deposit() {
@@ -89,7 +90,7 @@ async function deposit() {
   const r = await fetch(`${API}/deposit`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email: userId, amount })
+    body: JSON.stringify({ email: userId, amount, currency: 'BRL' })
   });
 
   const j = await r.json();
@@ -98,6 +99,9 @@ async function deposit() {
   let html = `Status: ${j.status || 'pending'}`;
   if (j.pixQrCode) {
     html += `<br><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px">`;
+  }
+  if (j.qr_code_base64) {
+    html += `<br><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px">`;
   }
   if (j.pixCopiaCola) {
     html += `<br><textarea readonly>${j.pixCopiaCola}</textarea>`;
@@ -119,7 +123,7 @@ async function withdraw() {
   const r = await fetch(`${API}/payout`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email: userId, amount, destination })
+    body: JSON.stringify({ email: userId, amount, destination, currency: 'BRL' })
   });
 
   const j = await r.json();
