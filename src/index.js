@@ -50,17 +50,14 @@ app.post('/deposit', async (req, res) => {
   try {
     const { email, amount, currency } = req.body;
 
-    // garante que o usuário existe
     const userId = await getOrCreateUser(email);
 
-    // chama a BullsPay para criar o pagamento Pix
     const paymentData = await createPaymentIntent({
       amount,
       currency,
       userRef: userId
     });
 
-    // insere no banco (sem passar id!)
     await pool.query(
       `INSERT INTO payments (user_id, amount, currency, type, status, raw)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -95,7 +92,6 @@ app.post('/payout', async (req, res) => {
       destination
     });
 
-    // insere no banco (sem passar id!)
     await pool.query(
       `INSERT INTO payments (user_id, amount, currency, type, status, raw)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -114,6 +110,11 @@ app.post('/payout', async (req, res) => {
     console.error('Erro no saque:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ✅ Rota de health check para o Render
+app.get('/', (req, res) => {
+  res.send('API online 🚀');
 });
 
 // Inicialização do servidor
