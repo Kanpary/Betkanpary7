@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { pool, init } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
 import CryptoJS from 'crypto-js';
@@ -12,7 +14,12 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Inicializa banco
 await init();
+
+// Configuração para servir arquivos estáticos da pasta "web"
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(__dirname, 'web')));
 
 // Helpers
 async function getOrCreateUser(email) {
@@ -130,7 +137,6 @@ app.post('/api/webhooks/fxpay', async (req, res) => {
     } else if (event.type === 'payout.succeeded') {
       await releaseHold(event.userRef, event.amount, true);
     } else if (event.type === 'payout.failed') {
-      // devolve o hold para balance
       await releaseHold(event.userRef, event.amount, false);
     }
 
@@ -156,7 +162,6 @@ app.post('/api/games/roulette/bet', async (req, res) => {
   const w = await getWallet(userId);
   if (!w || Number(w.balance) < amount) return res.status(400).json({ error: 'saldo insuficiente' });
 
-  // transação
   await pool.query('begin');
   await pool.query(`update wallets set balance = balance - $2 where user_id=$1`, [userId, amount]);
 
@@ -176,8 +181,4 @@ app.post('/api/games/roulette/bet', async (req, res) => {
     [uuidv4(), userId, amount, betType, String(betValue), result, color, payout, CryptoJS.SHA256(SERVER_SEED).toString(), clientSeed, nonce]);
   await pool.query('commit');
 
-  res.json({ result, color, win: payout > 0, payout, serverSeedHash: CryptoJS.SHA256(SERVER_SEED).toString(), clientSeed, nonce });
-});
-
-const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`API on ${port}`));
+  res.json({ result, color, win: payout > 0, payout,
