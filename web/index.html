@@ -52,46 +52,53 @@
   </div>
 
 <script>
-const API = '';
+const API = ''; // coloque aqui a URL do Render, ex: "https://seuapp.onrender.com"
 
 let userId = null;
 
 async function login() {
   const email = document.getElementById('email').value.trim();
   if (!email) return alert('Informe seu e-mail');
-  const r = await fetch(`${API}/api/demo/login`, {
+
+  // como não existe /api/demo/login no backend, vamos apenas simular criando o usuário
+  const r = await fetch(`${API}/deposit`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email })
+    body: JSON.stringify({ email, amount: 0 })
   });
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro no login');
-  userId = j.userId;
-  document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
+
+  if (!r.ok) {
+    const j = await r.json();
+    return alert(j.error || 'Erro no login');
+  }
+
+  // aqui só guardamos o email como referência
+  userId = email;
+  document.getElementById('user').innerText = `User: ${email}`;
 }
 
 async function wallet() {
   if (!userId) return alert('Faça login');
-  const r = await fetch(`${API}/api/wallet/${userId}`);
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
-  document.getElementById('wallet').innerText = `Saldo: R$ ${j.balance} | Hold: R$ ${j.hold}`;
+  // você ainda precisa implementar a rota GET /wallet/:userId no backend
+  alert('A rota de carteira ainda não foi implementada no backend.');
 }
 
 async function deposit() {
   if (!userId) return alert('Faça login');
   const reais = Number(document.getElementById('depAmount').value);
   if (!reais || reais < 5) return alert('O valor mínimo para depósito é R$ 5,00');
-  const amount = Math.floor(reais * 100); // converte para centavos
-  const r = await fetch(`${API}/api/payments/deposit-intent`, {
+  const amount = Math.floor(reais * 100); // centavos
+
+  const r = await fetch(`${API}/deposit`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ userId, amount })
+    body: JSON.stringify({ email: userId, amount })
   });
+
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro no depósito');
 
-  let html = `Intent: ${j.intentId}<br>Status: ${j.status || 'pending'}`;
+  let html = `Status: ${j.status || 'pending'}`;
   if (j.pixQrCode) {
     html += `<br><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px">`;
   }
@@ -110,34 +117,21 @@ async function withdraw() {
   const destination = document.getElementById('dest').value.trim();
   if (!reais || reais <= 0) return alert('Informe um valor válido');
   if (!destination) return alert('Informe o destino');
-  const amount = Math.floor(reais * 100); // centavos
-  const r = await fetch(`${API}/api/payouts/request`, {
+  const amount = Math.floor(reais * 100);
+
+  const r = await fetch(`${API}/payout`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ userId, amount, destination })
+    body: JSON.stringify({ email: userId, amount, destination })
   });
+
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro no saque');
-  document.getElementById('saq').innerText = `Payout: ${j.payoutId} (${j.status})`;
+  document.getElementById('saq').innerText = `Payout: ${j.gateway_id || ''} (${j.status})`;
 }
 
 async function bet() {
-  if (!userId) return alert('Faça login');
-  const amount = Number(document.getElementById('betAmount').value);
-  if (!amount || amount <= 0) return alert('Informe um valor válido');
-  const betType = document.getElementById('betType').value;
-  const raw = document.getElementById('betValue').value;
-  const betValue = betType === 'number' ? Number(raw) : raw;
-  const r = await fetch(`${API}/api/games/roulette/bet`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ userId, amount, betType, betValue })
-  });
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro na aposta');
-  document.getElementById('bet').innerText =
-    `Resultado: ${j.result} (${j.color}) | ${j.win ? 'Ganhou' : 'Perdeu'} | Pagou: R$ ${j.payout}`;
-  wallet();
+  alert('A rota de aposta ainda não foi implementada no backend.');
 }
 </script>
 </body>
