@@ -164,6 +164,49 @@ app.post('/payout', async (req, res) => {
   }
 });
 
+// ✅ Webhook da BullsPay para atualização de status
+app.post('/webhook/bullspay', async (req, res) => {
+  try {
+    const payload = req.body;
+    console.log("Webhook recebido:", JSON.stringify(payload, null, 2));
+
+    const transactionId = payload?.data?.payment_data?.id;
+    const status = payload?.data?.status || payload?.data?.payment_data?.status;
+
+    if (!transactionId) {
+      return res.status(400).json({ error: 'Transação inválida' });
+    }
+
+    // Atualiza status no banco
+    await pool.query(
+      `UPDATE payments SET status = $1, raw = $2 WHERE raw->'data'->'payment_data'->>'id' = $3`,
+      [status, JSON.stringify(payload), transactionId]
+    );
+
+    // Se pago, credita saldo
+    if (status === 'paid') {
+      const result = await pool.query(
+        `SELECT user_id, amount FROM payments WHERE raw->'data'->'payment_data'->>'id' = $1`,
+        [transactionId]
+      );
+
+      if (result.rows.length > 0) {
+        const { user_id, amount } = result.rows[0];
+        await pool.query(
+          `UPDATE wallets SET balance = balance + $1 WHERE user_id = $2`,
+          [amount, user_id]
+        );
+        console.log(`💰 Crédito realizado para usuário ${user_id}, valor ${amount}`);
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Erro no webhook:", err);
+    res.status(500).json({ error: 'Erro interno' });
+  }
+});
+
 // ✅ Rota de health check para o Render
 app.get('/', (req, res) => {
   res.send('API online 🚀');
