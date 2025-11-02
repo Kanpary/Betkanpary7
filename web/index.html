@@ -2,24 +2,74 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>FXPay Cassino</title>
+  <title>RaspadinhaKanpary</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: sans-serif; margin: 20px; background:#0f1218; color:#e6e6e6 }
-    .card { background:#181c25; border:1px solid #2a2f3a; padding: 12px; border-radius: 8px; margin-bottom: 12px }
-    textarea { width: 100%; }
-    button { margin-top: 6px; padding:6px 12px; border:none; border-radius:4px; cursor:pointer }
+    :root{
+      --bg:#0b0f1a; --card:#121725; --panel:#111626cc; --accent:#7c4dff;
+      --accent2:#21c17a; --text:#e6e6e6; --muted:#a9b0bd; --danger:#e74c3c;
+      --glass:rgba(255,255,255,0.06); --border:#2a2f3a;
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:20px;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background:#0f1218; color:var(--text);
+    }
+
+    /* Cartões básicos (mantidos do projeto para não quebrar) */
+    .card { background:#181c25; border:1px solid var(--border); padding:12px; border-radius:8px; margin-bottom:12px }
+    textarea { width:100%; }
+    button { margin-top:6px; padding:6px 12px; border:none; border-radius:4px; cursor:pointer }
     button:hover { opacity:0.9 }
     .btn-primary { background:#2d6cdf; color:#fff }
     .btn-success { background:#21c17a; color:#fff }
-    .btn-danger { background:#e74c3c; color:#fff }
-    table { width:100%; border-collapse: collapse; margin-top:10px }
-    th, td { border:1px solid #2a2f3a; padding:6px; text-align:center }
+    .btn-danger { background:var(--danger); color:#fff }
+    table { width:100%; border-collapse:collapse; margin-top:10px }
+    th, td { border:1px solid var(--border); padding:6px; text-align:center }
     th { background:#222; }
+
+    /* Marca e raspadinha visual */
+    .brand { display:flex; align-items:center; gap:10px; margin-bottom:12px }
+    .logo{
+      width:32px; height:32px; border-radius:8px;
+      background: conic-gradient(from 220deg at 50% 50%, #7c4dff, #21c17a, #ffd76d, #7c4dff);
+      box-shadow: 0 0 16px #7c4dff33;
+    }
+    .title { font-size:20px; font-weight:800; letter-spacing:.3px }
+
+    .scratch-card{
+      position:relative; border-radius:14px; overflow:hidden;
+      background: radial-gradient(600px 300px at 50% 0%, #1b2140, #12182f);
+      border:1px solid #ffffff14; min-height:260px;
+    }
+    .scratch-content{
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+      flex-direction:column; gap:8px; z-index:1; text-align:center; padding:20px;
+    }
+    .prize{
+      font-size:32px; font-weight:800;
+      background: linear-gradient(90deg, #ffd76d, #fff2a6);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      text-shadow: 0 2px 12px #0006;
+    }
+    .sub{ color:#b7c0d1; font-weight:600 }
+    canvas#scratch{ position:absolute; inset:0; z-index:2; cursor:crosshair; }
+
+    .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
+    .tag { background:#ffffff10; padding:6px 10px; border-radius:999px; border:1px solid #ffffff14; color:#b8c1d1; font-size:13px }
+    .balance { font-weight:700; color:#dfe6f3 }
+
+    /* Confete simples */
+    .confetti { position:fixed; inset:0; pointer-events:none; z-index:999; display:none }
   </style>
 </head>
 <body>
-  <h1>FXPay Cassino</h1>
+  <div class="brand">
+    <div class="logo"></div>
+    <div class="title">RaspadinhaKanpary</div>
+  </div>
 
   <div class="card">
     <input id="email" placeholder="Seu e-mail">
@@ -41,7 +91,7 @@
 
   <div class="card">
     <h3>Saque</h3>
-    <input id="saqAmount" type="number" value="20">
+    <input id="saqAmount" type="number" value="20" min="10" step="0.01">
     <select id="pixType">
       <option value="cpf">CPF</option>
       <option value="cnpj">CNPJ</option>
@@ -55,34 +105,34 @@
   </div>
 
   <div class="card">
-    <h3>Roleta</h3>
-    <input id="betAmount" type="number" value="5">
-    <select id="betType">
-      <option value="color">Cor</option>
-      <option value="number">Número</option>
-    </select>
-    <input id="betValue" placeholder="red/black/green ou 0-36" value="red">
-    <button class="btn-primary" onclick="bet()">Apostar</button>
-    <div id="bet"></div>
+    <h3>Raspadinha</h3>
+    <div class="scratch-card">
+      <div class="scratch-content" id="content">
+        <div class="sub">Seu prêmio</div>
+        <div class="prize" id="prizeText">R$ 0,00</div>
+        <div class="sub" id="prizeLabel">Clique em “Raspar agora”</div>
+      </div>
+      <canvas id="scratch"></canvas>
+    </div>
+    <div class="actions">
+      <span class="tag">Saldo: <span class="balance" id="balance">R$ 0,00</span></span>
+      <button class="btn-primary" onclick="playScratch()">Raspar agora</button>
+      <button class="btn" onclick="resetScratch()">Raspar de novo</button>
+    </div>
   </div>
 
-  <div class="card">
-    <h3>Histórico de Transações</h3>
-    <button class="btn-primary" onclick="loadTransactions()">Carregar histórico</button>
-    <table>
-      <thead>
-        <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
-      </thead>
-      <tbody id="txBody"></tbody>
-    </table>
-  </div>
+  <!-- Confete -->
+  <canvas class="confetti" id="confetti"></canvas>
 
   <script>
 const API = 'https://kanparycasino.onrender.com'; // URL do backend
-
 let userId = null;
 let userEmail = null;
 
+// Util
+const fmt = v => v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+
+// Login
 async function login() {
   const email = document.getElementById('email').value.trim();
   if (!email) return alert('Informe seu e-mail');
@@ -99,20 +149,25 @@ async function login() {
   userId = j.userId;
   userEmail = j.email;
   document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
+  wallet();
 }
 
+// Carteira
 async function wallet() {
   if (!userId) return alert('Faça login');
   const r = await fetch(`${API}/wallet/${userId}`);
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
-  document.getElementById('wallet').innerText = `Saldo: R$ ${j.balance.toFixed(2)} | Em processamento: R$ ${j.hold.toFixed(2)}`;
+  document.getElementById('wallet').innerText =
+    `Saldo: R$ ${j.balance.toFixed(2)} | Em processamento: R$ ${j.hold.toFixed(2)}`;
+  document.getElementById('balance').innerText = fmt(j.balance);
 }
 
+// Depósito
 async function deposit() {
   if (!userId) return alert('Faça login');
   const reais = Number(document.getElementById('depAmount').value);
-  if (!reais || reais <= 5) return alert('O valor mínimo para depósito é R$ 6,00');
+  if (!reais || reais < 6) return alert('O valor mínimo para depósito é R$ 6,00');
 
   const r = await fetch(`${API}/deposit`, {
     method:'POST',
@@ -153,6 +208,7 @@ function copyCopiaCola() {
   alert('Código Pix copiado!');
 }
 
+// Saque
 async function withdraw() {
   if (!userId) return alert('Faça login');
   const reais = Number(document.getElementById('saqAmount').value);
@@ -177,28 +233,74 @@ async function withdraw() {
   if (!r.ok) return alert(j.error || 'Erro no saque');
   document.getElementById('saq').innerText = `Payout: ${j.gateway_id || ''} (${j.status})`;
 }
+  </script>
 
-    async function bet() {
+  <div class="card">
+    <h3>Histórico de Transações</h3>
+    <button class="btn-primary" onclick="loadTransactions()">Carregar histórico</button>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
+      </thead>
+      <tbody id="txBody"></tbody>
+    </table>
+  </div>
+
+  <script>
+let currentPrize = 0;
+
+// Inicia raspadinha
+function playScratch() {
   if (!userId) return alert('Faça login');
-  const reais = Number(document.getElementById('betAmount').value);
-  const betType = document.getElementById('betType').value;
-  const betValue = document.getElementById('betValue').value.trim();
-
-  if (!reais || reais <= 0) return alert('Informe um valor válido para aposta');
-
-  const r = await fetch(`${API}/bet`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ userId, amount: reais, betType, betValue })
-  });
-
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro na aposta');
-
-  document.getElementById('bet').innerText =
-    `Número sorteado: ${j.outcome} | Ganhou: R$ ${j.win.toFixed(2)} | Saldo final: R$ ${j.finalBalance.toFixed(2)}`;
+  // Simulação local de prêmios (pode ser substituído por chamada ao backend)
+  const pool = [0,0,0,0,1,2,5,10,20,50];
+  currentPrize = pool[Math.floor(Math.random()*pool.length)];
+  document.getElementById('prizeText').innerText = `R$ ${currentPrize.toFixed(2)}`;
+  document.getElementById('prizeLabel').innerText = 'Raspe para revelar';
+  resetScratch();
 }
 
+// Resetar raspadinha
+function resetScratch() {
+  currentPrize = 0;
+  document.getElementById('prizeText').innerText = 'R$ 0,00';
+  document.getElementById('prizeLabel').innerText = 'Clique em “Raspar agora”';
+  resetMask();
+}
+
+// Canvas raspadinha
+const canvas = document.getElementById('scratch');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  resetMask();
+}
+function resetMask(){
+  ctx.fillStyle = '#c0c0c0';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+let isDown=false;
+canvas.addEventListener('mousedown', e=>{ isDown=true; scratch(e); });
+canvas.addEventListener('mousemove', e=>{ if(isDown) scratch(e); });
+window.addEventListener('mouseup', ()=> isDown=false);
+
+function scratch(e){
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(x,y,20,0,Math.PI*2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// Histórico de transações
 async function loadTransactions() {
   if (!userId) return alert('Faça login');
   const r = await fetch(`${API}/transactions/${userId}?limit=10`);
@@ -217,6 +319,6 @@ async function loadTransactions() {
   document.getElementById('txBody').innerHTML =
     rows || '<tr><td colspan="4">Sem transações</td></tr>';
 }
-</script>
+  </script>
 </body>
 </html>
