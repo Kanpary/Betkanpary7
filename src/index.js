@@ -35,8 +35,9 @@ async function getOrCreateUser(email) {
 
   const userId = up.rows[0].id;
 
+  // Cria carteira com saldo inicial de R$ 500,00 (50000 centavos)
   await pool.query(
-    `INSERT INTO wallets (user_id) VALUES ($1)
+    `INSERT INTO wallets (user_id, balance) VALUES ($1, 50000)
      ON CONFLICT (user_id) DO NOTHING`,
     [userId]
   );
