@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { pool, init } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createPaymentIntent, createPayout } from './bullspay.js';
+import { playRound } from './gameEngine.js'; // motor do jogo RTP
 
 dotenv.config();
 
@@ -94,7 +95,6 @@ app.post('/deposit', async (req, res) => {
 
     console.log('Resposta BullsPay:', paymentData);
 
-    // Normaliza os campos para sempre devolver QR e Copia e Cola
     const qrCodeUrl = paymentData.pixQrCode || null;
     const qrCodeBase64 = paymentData.qr_code_base64 || null;
     const copiaCola =
@@ -163,36 +163,32 @@ app.post('/payout', async (req, res) => {
   }
 });
 
-// ✅ Rota de aposta (roleta)
+// ✅ Rota de aposta (roleta simples)
 app.post('/bet', async (req, res) => {
   try {
     const { userId, amount, betType, betValue } = req.body;
 
-    // Busca carteira
     const result = await pool.query('SELECT balance FROM wallets WHERE user_id = $1', [userId]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Carteira não encontrada' });
 
     const balance = result.rows[0].balance;
     if (balance < amount) return res.status(400).json({ error: 'Saldo insuficiente' });
 
-    // Debita aposta
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [amount, userId]);
 
-    // Sorteia número da roleta (0 a 36)
     const outcome = Math.floor(Math.random() * 37);
     let win = 0;
 
     if (betType === 'number' && parseInt(betValue) === outcome) {
-      win = amount * 35; // paga 35x
+      win = amount * 35;
     } else if (betType === 'color') {
       const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
       const blackNumbers = [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35];
       let color = 'green';
       if (redNumbers.includes(outcome)) color = 'red';
       else if (blackNumbers.includes(outcome)) color = 'black';
-
       if (betValue === color) {
-        win = amount * 2; // paga 2x
+        win = amount * 2;
       }
     }
 
@@ -204,6 +200,64 @@ app.post('/bet', async (req, res) => {
   } catch (err) {
     console.error('Erro na aposta:', err);
     res.status(500).json({ error: 'Erro interno na aposta' });
+  }
+});
+
+// 🎮 Rota para jogar no caça-níquel com RTP
+app.post('/games/:gameId/play', async (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const { userId, amount } = req.body;
+
+    const w = await pool.query('SELECT balance FROM wallets WHERE user_id=$1',[userId]);
+    if (!w.rows.length) return res.status(404).json({error:'Carteira não encontrada'});
+    if (Number(w.rows[0].balance) < amount) return res.status(400).json({error:'Saldo insuficiente'});
+
+    await pool.query('UPDATE wallets SET balance=balance-$1 WHERE user_id=$2',[amount,userId]);
+
+    const result = await playRound({ gameId, userId, amount });
+
+    if (result.win > 0) {
+      await pool.query('UPDATE wallets SET balance=balance+$1 WHERE user_id=$2',[result.win,userId]);
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Erro ao jogar:', err);
+    res.status(500).json({ error: 'Erro ao processar rodada' });
+  }
+});
+
+// 🎛️ Rota admin para configurar RTP
+app.put('/admin/games/:gameId/rtp', async (req,res)=>{
+  try {
+    const { gameId } = req.params;
+    const { rtp_target, volatility } = req.body;
+    await pool.query(
+      'UPDATE games SET rtp_target=$1, volatility=COALESCE($2,volatility) WHERE id=$3',
+      [rtp_target, volatility, gameId]
+    );
+    res.json({ok:true});
+  } catch (err) {
+    console.error('Erro ao configurar RTP:', err);
+    res.status(500).json({ error: 'Erro ao configurar RTP' });
+  }
+});
+
+// 🎛️ Rota admin para consultar estatísticas do jogo
+app.get('/admin/games/:gameId/stats', async (req,res)=>{
+  try {
+    const { gameId } = req.params;
+    const g = await pool.query('SELECT * FROM games WHERE id=$1',[gameId]);
+    const s = await pool.query('SELECT * FROM game_stats WHERE game_id=$1',[gameId]);
+    if (!g.rows.length) return res.status(404).json({error:'Jogo não encontrado'});
+    const total_bet = s.rows[0]?.total_bet || 0;
+    const total_payout = s.rows[0]?.total_payout || 0;
+    const rtp_current = total_bet > 0 ? (total_payout/total_bet)*100 : 0;
+    res.json({game:g.rows[0], stats:{...s.rows[0], rtp_current}});
+  } catch (err) {
+    console.error('Erro ao buscar stats:', err);
+    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
   }
 });
 
