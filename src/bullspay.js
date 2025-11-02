@@ -32,15 +32,23 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
   const data = await resp.json();
 
   // Log para debug (veja no Render)
-  console.log("Resposta BullsPay:", data);
+  console.log("Resposta BullsPay:", JSON.stringify(data, null, 2));
 
   // Normaliza os campos para o front
   return {
     gateway_id: data.data?.unic_id || null,
     status: data.data?.status || 'pending',
+    // QR Code pode vir como URL ou base64
     pixQrCode: data.data?.pixQrCode || data.data?.qr_code_url || null,
     qr_code_base64: data.data?.qr_code_base64 || data.data?.qrCodeBase64 || null,
-    pixCopiaCola: data.data?.pixCopiaCola || data.data?.qr_code_text || data.data?.pixCopiaECola || null,
+    // Pix Copia e Cola pode vir com nomes diferentes
+    pixCopiaCola: data.data?.pixCopiaCola
+               || data.data?.qr_code_text
+               || data.data?.pixCopiaECola
+               || data.data?.pix_code
+               || data.data?.payload
+               || data.data?.emv
+               || null,
     checkoutUrl: data.data?.checkoutUrl || data.data?.url || null,
     raw: data
   };
@@ -72,11 +80,11 @@ export async function createPayout({ amount, currency, userRef, destination }) {
 
   const data = await resp.json();
 
-  console.log("Resposta BullsPay (payout):", data);
+  console.log("Resposta BullsPay (payout):", JSON.stringify(data, null, 2));
 
   return {
     gateway_id: data.data?.unic_id || null,
     status: data.data?.status || 'pending',
     raw: data
   };
-      }
+}
