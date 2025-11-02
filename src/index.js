@@ -22,8 +22,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 await init();
 
 // Paths estáticos
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const webDir = path.join(__dirname, '..', 'web');
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+const webDir = path.join(dirname, '..', 'web');
 app.use(express.static(webDir));
 
 // Util: normalizar valores em reais → centavos
@@ -96,12 +96,11 @@ app.post('/deposit', async (req, res) => {
     const userId = await getOrCreateUser(email);
 
     const paymentData = await createPaymentIntent({
-      amount,                 // manter em reais para o provedor
+      amount,
       currency: currency || 'BRL',
       userRef: userId
     });
 
-    // Persistir a ordem
     await pool.query(
       `INSERT INTO payments (user_id, amount, currency, type, status, raw)
        VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -133,7 +132,6 @@ app.post('/payout', async (req, res) => {
 
     const userId = await getOrCreateUser(email);
 
-    // Debita da carteira antes de acionar o payout
     const cents = toCents(amount);
     const w = await pool.query('SELECT balance FROM wallets WHERE user_id=$1', [userId]);
     if (!w.rows.length) return res.status(404).json({ error: 'Carteira não encontrada' });
@@ -141,7 +139,7 @@ app.post('/payout', async (req, res) => {
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
     const payoutData = await createPayout({
-      amount,                   // reais para o provedor
+      amount,
       currency: currency || 'BRL',
       userRef: userId,
       destination
@@ -162,7 +160,7 @@ app.post('/payout', async (req, res) => {
 
 // ===================== Jogos =====================
 
-// Roleta simples — amount chega em reais, operamos em centavos
+// Roleta simples
 app.post('/bet', async (req, res) => {
   try {
     const { userId, amount, betType, betValue } = req.body;
@@ -178,8 +176,10 @@ app.post('/bet', async (req, res) => {
     const balance = Number(r.rows[0].balance);
     if (balance < cents) return res.status(400).json({ error: 'Saldo insuficiente' });
 
+    // Debita aposta
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
+    // Resultado da roleta
     const outcome = Math.floor(Math.random() * 37);
     let winCents = 0;
 
@@ -197,6 +197,7 @@ app.post('/bet', async (req, res) => {
       if (String(betValue) === color) winCents = cents * 2; // 1:1
     }
 
+    // Credita prêmio se houver
     if (winCents > 0) {
       await pool.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [winCents, userId]);
     }
@@ -213,7 +214,7 @@ app.post('/bet', async (req, res) => {
   }
 });
 
-// Caça-níquel com RTP — amount em reais → centavos
+// Caça-níquel com RTP
 app.post('/games/:gameId/play', async (req, res) => {
   try {
     const { gameId } = req.params;
@@ -227,11 +228,13 @@ app.post('/games/:gameId/play', async (req, res) => {
     if (!w.rows.length) return res.status(404).json({ error: 'Carteira não encontrada' });
     if (Number(w.rows[0].balance) < cents) return res.status(400).json({ error: 'Saldo insuficiente' });
 
+    // Debita aposta
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
-    // playRound deve trabalhar em centavos para consistência
+    // Executa rodada no motor do jogo
     const result = await playRound({ gameId, userId, amount: cents });
 
+    // Credita prêmio se houver
     if (result.win > 0) {
       await pool.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [result.win, userId]);
     }
@@ -248,7 +251,9 @@ app.post('/games/:gameId/play', async (req, res) => {
   }
 });
 
-// Admin: configurar RTP/volatilidade
+// ===================== Admin =====================
+
+// Configurar RTP/volatilidade de um jogo
 app.put('/admin/games/:gameId/rtp', async (req, res) => {
   try {
     const { gameId } = req.params;
@@ -267,7 +272,7 @@ app.put('/admin/games/:gameId/rtp', async (req, res) => {
   }
 });
 
-// Admin: estatísticas e RTP atual
+// Estatísticas e RTP atual de um jogo
 app.get('/admin/games/:gameId/stats', async (req, res) => {
   try {
     const { gameId } = req.params;
@@ -307,7 +312,7 @@ app.post('/webhook/bullspay', async (req, res) => {
 
     if (!transactionId) return res.status(400).json({ error: 'Transação inválida' });
 
-    // Atualiza status
+    // Atualiza status do pagamento
     await pool.query(
       `UPDATE payments SET status = $1, raw = $2 
        WHERE raw->'data'->'payment_data'->>'id' = $3`,
@@ -325,10 +330,10 @@ app.post('/webhook/bullspay', async (req, res) => {
       if (result.rows.length > 0) {
         const { user_id, amount } = result.rows[0]; // amount já em centavos
         await pool.query(
-          `UPDATE wallets SET balance = balance + $1 WHERE user_id = $2`,
+          'UPDATE wallets SET balance = balance + $1 WHERE user_id = $2',
           [amount, user_id]
         );
-        console.log(`Crédito realizado para usuário ${user_id}, valor R$ ${fromCents(amount)}`);
+        console.log(`💰 Crédito realizado para usuário ${user_id}, valor R$ ${fromCents(amount)}`);
       }
     }
 
