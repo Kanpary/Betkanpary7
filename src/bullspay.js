@@ -1,6 +1,6 @@
 // bullspay.js
 
-// Criação de pagamento Pix
+// Criação de pagamento Pix (depósito)
 export async function createPaymentIntent({ amount, currency, userRef }) {
   const resp = await fetch('https://api-gateway.bullspay.com.br/api/transactions/create', {
     method: 'POST',
@@ -49,9 +49,9 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
   };
 }
 
-// Criação de saque (payout)
+// Criação de saque (withdrawal)
 export async function createPayout({ amount, currency, userRef, destination }) {
-  const resp = await fetch('https://api-gateway.bullspay.com.br/api/transactions/payout', {
+  const resp = await fetch('https://api-gateway.bullspay.com.br/api/withdrawals/request', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -60,11 +60,14 @@ export async function createPayout({ amount, currency, userRef, destination }) {
       'X-Private-Key': process.env.BULLSPAY_API_KEY
     },
     body: JSON.stringify({
-      amount,
+      amount, // em centavos
       currency: currency || 'BRL',
       external_id: `${userRef}-${Date.now()}`,
       payment_method: "pix",
-      destination
+      postback_url: `${process.env.BASE_URL || 'https://kanparycasino.onrender.com'}/api/webhooks/bullspay/payout`,
+      // destination deve conter { type: "cpf"|"cnpj"|"email"|"phone"|"random", key: "..." }
+      pix_key_type: destination.type,
+      pix_key: destination.key
     })
   });
 
@@ -75,7 +78,7 @@ export async function createPayout({ amount, currency, userRef, destination }) {
 
   const data = await resp.json();
 
-  console.log("Resposta BullsPay (payout):", JSON.stringify(data, null, 2));
+  console.log("Resposta BullsPay (withdrawal):", JSON.stringify(data, null, 2));
 
   return {
     gateway_id: data.data?.unic_id || null,
