@@ -5,10 +5,17 @@
   <title>FXPay Cassino</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: sans-serif; margin: 20px }
-    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 12px }
+    body { font-family: sans-serif; margin: 20px; background:#0f1218; color:#e6e6e6 }
+    .card { background:#181c25; border:1px solid #2a2f3a; padding: 12px; border-radius: 8px; margin-bottom: 12px }
     textarea { width: 100%; }
-    button { margin-top: 6px; }
+    button { margin-top: 6px; padding:6px 12px; border:none; border-radius:4px; cursor:pointer }
+    button:hover { opacity:0.9 }
+    .btn-primary { background:#2d6cdf; color:#fff }
+    .btn-success { background:#21c17a; color:#fff }
+    .btn-danger { background:#e74c3c; color:#fff }
+    table { width:100%; border-collapse: collapse; margin-top:10px }
+    th, td { border:1px solid #2a2f3a; padding:6px; text-align:center }
+    th { background:#222; }
   </style>
 </head>
 <body>
@@ -16,19 +23,19 @@
 
   <div class="card">
     <input id="email" placeholder="Seu e-mail">
-    <button onclick="login()">Entrar</button>
+    <button class="btn-primary" onclick="login()">Entrar</button>
     <div id="user"></div>
   </div>
 
   <div class="card">
-    <button onclick="wallet()">Atualizar carteira</button>
+    <button class="btn-success" onclick="wallet()">Atualizar carteira</button>
     <div id="wallet"></div>
   </div>
 
   <div class="card">
     <h3>Depósito</h3>
     <input id="depAmount" type="number" value="50" min="5">
-    <button onclick="deposit()">Depositar</button>
+    <button class="btn-success" onclick="deposit()">Depositar</button>
     <div id="dep"></div>
   </div>
 
@@ -43,7 +50,7 @@
       <option value="random">Chave Aleatória</option>
     </select>
     <input id="pixKey" placeholder="Informe a chave Pix">
-    <button onclick="withdraw()">Sacar</button>
+    <button class="btn-danger" onclick="withdraw()">Sacar</button>
     <div id="saq"></div>
   </div>
 
@@ -55,11 +62,22 @@
       <option value="number">Número</option>
     </select>
     <input id="betValue" placeholder="red/black/green ou 0-36" value="red">
-    <button onclick="bet()">Apostar</button>
+    <button class="btn-primary" onclick="bet()">Apostar</button>
     <div id="bet"></div>
-  </div>
+        </div>
 
-<script>
+  <div class="card">
+    <h3>Histórico de Transações</h3>
+    <button class="btn-primary" onclick="loadTransactions()">Carregar histórico</button>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
+      </thead>
+      <tbody id="txBody"></tbody>
+    </table>
+      </div>
+
+  <script>
 const API = 'https://kanparycasino.onrender.com'; // URL do backend
 
 let userId = null;
@@ -179,6 +197,24 @@ async function bet() {
 
   document.getElementById('bet').innerText = `Número sorteado: ${j.outcome} | Ganhou: R$ ${j.win.toFixed(2)} | Saldo final: R$ ${j.finalBalance.toFixed(2)}`;
 }
+
+async function loadTransactions() {
+  if (!userId) return alert('Faça login');
+  const r = await fetch(`${API}/transactions/${userId}?limit=10`);
+  const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro ao buscar histórico');
+
+  const rows = j.items.map(tx => `
+    <tr>
+      <td>${new Date(tx.created_at).toLocaleString('pt-BR')}</td>
+      <td>${tx.type}</td>
+      <td>R$ ${(tx.amount/100).toFixed(2)}</td>
+      <td>R$ ${(tx.balance_after/100).toFixed(2)}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('txBody').innerHTML = rows || '<tr><td colspan="4">Sem transações</td></tr>';
+}
 </script>
 </body>
-</html>
+  </html>
