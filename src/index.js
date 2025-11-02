@@ -1,5 +1,3 @@
-// index.js
-
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -165,6 +163,50 @@ app.post('/payout', async (req, res) => {
   }
 });
 
+// ✅ Rota de aposta (roleta)
+app.post('/bet', async (req, res) => {
+  try {
+    const { userId, amount, betType, betValue } = req.body;
+
+    // Busca carteira
+    const result = await pool.query('SELECT balance FROM wallets WHERE user_id = $1', [userId]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Carteira não encontrada' });
+
+    const balance = result.rows[0].balance;
+    if (balance < amount) return res.status(400).json({ error: 'Saldo insuficiente' });
+
+    // Debita aposta
+    await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [amount, userId]);
+
+    // Sorteia número da roleta (0 a 36)
+    const outcome = Math.floor(Math.random() * 37);
+    let win = 0;
+
+    if (betType === 'number' && parseInt(betValue) === outcome) {
+      win = amount * 35; // paga 35x
+    } else if (betType === 'color') {
+      const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+      const blackNumbers = [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35];
+      let color = 'green';
+      if (redNumbers.includes(outcome)) color = 'red';
+      else if (blackNumbers.includes(outcome)) color = 'black';
+
+      if (betValue === color) {
+        win = amount * 2; // paga 2x
+      }
+    }
+
+    if (win > 0) {
+      await pool.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [win, userId]);
+    }
+
+    res.json({ outcome, win, finalBalance: balance - amount + win });
+  } catch (err) {
+    console.error('Erro na aposta:', err);
+    res.status(500).json({ error: 'Erro interno na aposta' });
+  }
+});
+
 // ✅ Webhook da BullsPay para atualização de status
 app.post('/webhook/bullspay', async (req, res) => {
   try {
@@ -180,14 +222,16 @@ app.post('/webhook/bullspay', async (req, res) => {
 
     // Atualiza status no banco
     await pool.query(
-      `UPDATE payments SET status = $1, raw = $2 WHERE raw->'data'->'payment_data'->>'id' = $3`,
+      `UPDATE payments SET status = $1, raw = $2 
+       WHERE raw->'data'->'payment_data'->>'id' = $3`,
       [status, JSON.stringify(payload), transactionId]
     );
 
     // Se pago, credita saldo
     if (status === 'paid') {
       const result = await pool.query(
-        `SELECT user_id, amount FROM payments WHERE raw->'data'->'payment_data'->>'id' = $1`,
+        `SELECT user_id, amount FROM payments 
+         WHERE raw->'data'->'payment_data'->>'id' = $1`,
         [transactionId]
       );
 
