@@ -15,6 +15,7 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
       currency: currency || 'BRL',
       external_id: `${userRef}-${Date.now()}`, // evita duplicidade
       payment_method: "pix",
+      postback_url: `${process.env.BASE_URL || 'https://kanparycasino.onrender.com'}/api/webhooks/bullspay`,
       buyer_infos: {
         buyer_name: "João da Silva", // nome válido
         buyer_email: "joao@example.com", // e-mail válido
