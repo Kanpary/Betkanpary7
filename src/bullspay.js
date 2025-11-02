@@ -36,20 +36,14 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
 
   // Normaliza os campos para o front
   return {
-    gateway_id: data.data?.unic_id || null,
-    status: data.data?.status || 'pending',
-    // QR Code pode vir como URL ou base64
-    pixQrCode: data.data?.pixQrCode || data.data?.qr_code_url || null,
-    qr_code_base64: data.data?.qr_code_base64 || data.data?.qrCodeBase64 || null,
-    // Pix Copia e Cola pode vir com nomes diferentes
-    pixCopiaCola: data.data?.pixCopiaCola
-               || data.data?.qr_code_text
-               || data.data?.pixCopiaECola
-               || data.data?.pix_code
-               || data.data?.payload
-               || data.data?.emv
-               || null,
-    checkoutUrl: data.data?.checkoutUrl || data.data?.url || null,
+    gateway_id: data.data?.payment_data?.id || null,
+    status: data.data?.payment_data?.status || 'pending',
+    // A BullsPay não retorna imagem de QR, apenas o código Pix
+    pixQrCode: null,
+    qr_code_base64: null,
+    // Pix Copia e Cola vem em data.pix_data.qrcode
+    pixCopiaCola: data.data?.pix_data?.qrcode || null,
+    checkoutUrl: null,
     raw: data
   };
 }
