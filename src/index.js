@@ -7,7 +7,6 @@ import { fileURLToPath } from 'url';
 import { pool, init } from './db.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createPaymentIntent, createPayout } from './bullspay.js';
-import { playRound } from './gameEngine.js';
 
 dotenv.config();
 
@@ -101,14 +100,14 @@ app.post('/deposit', async (req, res) => {
     if (!email || !amount) {
       return res.status(400).json({ error: 'E-mail e amount são obrigatórios' });
     }
-    if (amount <= 6) {
+    if (amount < 6) {
       return res.status(400).json({ error: 'O valor mínimo para depósito é R$ 6,00' });
     }
 
     const userId = await getOrCreateUser(email);
 
     const paymentData = await createPaymentIntent({
-      amount: toCents(amount), // <<< aqui a mudança
+      amount: toCents(amount), // envia em centavos
       currency: currency || 'BRL',
       userRef: userId
     });
@@ -156,7 +155,7 @@ app.post('/payout', async (req, res) => {
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
     const payoutData = await createPayout({
-      amount,
+      amount: toCents(amount),
       currency: currency || 'BRL',
       userRef: userId,
       destination
@@ -175,17 +174,16 @@ app.post('/payout', async (req, res) => {
   }
 });
 
-// ===================== Jogos =====================
+// ===================== Jogo: Raspadinha =====================
 
-// Roleta simples
-app.post('/bet', async (req, res) => {
+app.post('/scratch/play', async (req, res) => {
   try {
-    const { userId, amount, betType, betValue } = req.body;
-    if (!userId || !amount || !betType || betValue === undefined) {
-      return res.status(400).json({ error: 'Parâmetros obrigatórios: userId, amount, betType, betValue' });
+    const { userId, bet } = req.body;
+    if (!userId || !bet) {
+      return res.status(400).json({ error: 'Parâmetros obrigatórios: userId e bet' });
     }
 
-    const cents = toCents(amount);
+    const cents = toCents(bet);
     if (cents <= 0) return res.status(400).json({ error: 'Valor de aposta inválido' });
 
     const r = await pool.query('SELECT balance FROM wallets WHERE user_id = $1', [userId]);
@@ -196,53 +194,37 @@ app.post('/bet', async (req, res) => {
     // Debita aposta
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
-    // Resultado da roleta
-    const outcome = Math.floor(Math.random() * 37);
-    let winCents = 0;
+    // Sorteio simples de prêmios em centavos
+    const poolPrizes = [0,0,0,0,100,200,500,1000,2000,5000];
+    const prize = poolPrizes[Math.floor(Math.random() * poolPrizes.length)];
 
-    if (betType === 'number') {
-      const num = parseInt(betValue);
-      if (!Number.isNaN(num) && num === outcome) {
-        winCents = cents * 35; // payout 35:1
-      }
-    } else if (betType === 'color') {
-      const red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
-      const black = [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35];
-      let color = 'green';
-      if (red.includes(outcome)) color = 'red';
-      else if (black.includes(outcome)) color = 'black';
-      if (String(betValue) === color) winCents = cents * 2; // 1:1
+    if (prize > 0) {
+      await pool.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [prize, userId]);
     }
 
-    // Credita prêmio se houver
-    if (winCents > 0) {
-      await pool.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [winCents, userId]);
-    }
-
-    const finalBalance = balance - cents + winCents;
+    const finalBalance = balance - cents + prize;
     res.json({
-      outcome,
-      win: fromCents(winCents),
+      bet: fromCents(cents),
+      prize: fromCents(prize),
       finalBalance: fromCents(finalBalance)
     });
   } catch (err) {
-    console.error('Erro na aposta:', err);
-    res.status(500).json({ error: 'Erro interno na aposta' });
+    console.error('Erro na raspadinha:', err);
+    res.status(500).json({ error: 'Erro interno na raspadinha' });
   }
 });
 
-// ===================== Jogos =====================
+// ===================== Jogo: Raspadinha =====================
 
-// Caça-níquel com RTP
-app.post('/games/:gameId/play', async (req, res) => {
+// Jogar raspadinha
+app.post('/scratch/play', async (req, res) => {
   try {
-    const { gameId } = req.params;
-    const { userId, amount } = req.body;
-    if (!userId || !amount) {
-      return res.status(400).json({ error: 'Parâmetros obrigatórios: userId e amount' });
+    const { userId, bet } = req.body;
+    if (!userId || !bet) {
+      return res.status(400).json({ error: 'Parâmetros obrigatórios: userId e bet' });
     }
 
-    const cents = toCents(amount);
+    const cents = toCents(bet);
     if (cents <= 0) return res.status(400).json({ error: 'Valor de aposta inválido' });
 
     const w = await pool.query('SELECT balance FROM wallets WHERE user_id=$1', [userId]);
@@ -254,71 +236,24 @@ app.post('/games/:gameId/play', async (req, res) => {
     // Debita aposta
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
-    // Executa rodada no motor do jogo
-    const result = await playRound({ gameId, userId, amount: cents });
+    // Sorteio simples de prêmios em centavos
+    const poolPrizes = [0,0,0,0,100,200,500,1000,2000,5000];
+    const prize = poolPrizes[Math.floor(Math.random() * poolPrizes.length)];
 
     // Credita prêmio se houver
-    if (result.win > 0) {
-      await pool.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [result.win, userId]);
+    if (prize > 0) {
+      await pool.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [prize, userId]);
     }
 
+    const finalBalance = Number(w.rows[0].balance) - cents + prize;
     res.json({
-      ...result,
       bet: fromCents(cents),
-      win: fromCents(result.win),
-      balance: fromCents(Number(w.rows[0].balance) - cents + result.win)
+      prize: fromCents(prize),
+      finalBalance: fromCents(finalBalance)
     });
   } catch (err) {
-    console.error('Erro ao jogar:', err);
-    res.status(500).json({ error: 'Erro ao processar rodada' });
-  }
-});
-
-// ===================== Admin =====================
-
-// Configurar RTP/volatilidade de um jogo
-app.put('/admin/games/:gameId/rtp', async (req, res) => {
-  try {
-    const { gameId } = req.params;
-    const { rtp_target, volatility } = req.body;
-    if (rtp_target === undefined && volatility === undefined) {
-      return res.status(400).json({ error: 'Informe rtp_target ou volatility' });
-    }
-    await pool.query(
-      'UPDATE games SET rtp_target = COALESCE($1, rtp_target), volatility = COALESCE($2, volatility) WHERE id = $3',
-      [rtp_target, volatility, gameId]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Erro ao configurar RTP:', err);
-    res.status(500).json({ error: 'Erro ao configurar RTP' });
-  }
-});
-
-// Estatísticas e RTP atual de um jogo
-app.get('/admin/games/:gameId/stats', async (req, res) => {
-  try {
-    const { gameId } = req.params;
-    const g = await pool.query('SELECT * FROM games WHERE id=$1', [gameId]);
-    if (!g.rows.length) return res.status(404).json({ error: 'Jogo não encontrado' });
-
-    const s = await pool.query('SELECT * FROM game_stats WHERE game_id=$1', [gameId]);
-    const total_bet = Number(s.rows[0]?.total_bet || 0);
-    const total_payout = Number(s.rows[0]?.total_payout || 0);
-    const rtp_current = total_bet > 0 ? (total_payout / total_bet) * 100 : 0;
-
-    res.json({
-      game: g.rows[0],
-      stats: {
-        ...s.rows[0],
-        rtp_current,
-        total_bet_reais: fromCents(total_bet),
-        total_payout_reais: fromCents(total_payout)
-      }
-    });
-  } catch (err) {
-    console.error('Erro ao buscar stats:', err);
-    res.status(500).json({ error: 'Erro ao buscar estatísticas' });
+    console.error('Erro na raspadinha:', err);
+    res.status(500).json({ error: 'Erro interno na raspadinha' });
   }
 });
 
@@ -381,9 +316,7 @@ app.get('*', (req, res, next) => {
       req.path.startsWith('/wallet') ||
       req.path.startsWith('/deposit') ||
       req.path.startsWith('/payout') ||
-      req.path.startsWith('/bet') ||
-      req.path.startsWith('/games') ||
-      req.path.startsWith('/admin') ||
+      req.path.startsWith('/scratch') ||
       req.path.startsWith('/webhook') ||
       req.path.startsWith('/health')) {
     return next();
@@ -396,4 +329,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
-      
