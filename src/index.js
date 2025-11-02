@@ -101,7 +101,7 @@ app.post('/deposit', async (req, res) => {
     if (!email || !amount) {
       return res.status(400).json({ error: 'E-mail e amount são obrigatórios' });
     }
-    if (amount <= 5) {
+    if (amount <= 6) {
       return res.status(400).json({ error: 'O valor mínimo para depósito é R$ 6,00' });
     }
 
