@@ -108,7 +108,7 @@ app.post('/deposit', async (req, res) => {
     const userId = await getOrCreateUser(email);
 
     const paymentData = await createPaymentIntent({
-      amount,
+      amount: toCents(amount), // <<< aqui a mudança
       currency: currency || 'BRL',
       userRef: userId
     });
@@ -396,3 +396,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
+      
