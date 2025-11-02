@@ -8,6 +8,7 @@
     body { font-family: sans-serif; margin: 20px }
     .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 12px }
     textarea { width: 100%; }
+    button { margin-top: 6px; }
   </style>
 </head>
 <body>
@@ -96,27 +97,38 @@ async function deposit() {
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro no depósito');
 
-  let html = `Status: ${j.status || 'pending'}`;
+  let html = `<p><b>Status:</b> ${j.status || 'pending'}</p>`;
 
   // QR Code como URL
   if (j.pixQrCode) {
-    html += `<br><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px">`;
+    html += `<p><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px"></p>`;
   }
   // QR Code em base64
   if (j.qr_code_base64) {
-    html += `<br><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px">`;
+    html += `<p><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px"></p>`;
   }
-  // Pix Copia e Cola (pode vir com nomes diferentes)
-  if (j.pixCopiaCola || j.qr_code_text || j.pixCopiaECola) {
-    const copiaCola = j.pixCopiaCola || j.qr_code_text || j.pixCopiaECola;
-    html += `<br><label>Copia e Cola:</label><br><textarea readonly>${copiaCola}</textarea>`;
+  // Pix Copia e Cola
+  if (j.pixCopiaCola) {
+    html += `
+      <p><b>Copia e Cola:</b></p>
+      <textarea id="copiaCola" readonly style="width:100%;height:80px">${j.pixCopiaCola}</textarea>
+      <button onclick="copyCopiaCola()">Copiar código</button>
+    `;
   }
   // Link de checkout
   if (j.checkoutUrl) {
-    html += `<br><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a>`;
+    html += `<p><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a></p>`;
   }
 
   document.getElementById('dep').innerHTML = html;
+}
+
+function copyCopiaCola() {
+  const textarea = document.getElementById('copiaCola');
+  textarea.select();
+  textarea.setSelectionRange(0, 99999); // para mobile
+  document.execCommand('copy');
+  alert('Código Pix copiado!');
 }
 
 async function withdraw() {
