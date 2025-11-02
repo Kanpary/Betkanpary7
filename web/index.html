@@ -35,7 +35,14 @@
   <div class="card">
     <h3>Saque</h3>
     <input id="saqAmount" type="number" value="20">
-    <input id="dest" placeholder="Destino (chave Pix ou conta)">
+    <select id="pixType">
+      <option value="cpf">CPF</option>
+      <option value="cnpj">CNPJ</option>
+      <option value="email">E-mail</option>
+      <option value="phone">Telefone</option>
+      <option value="random">Chave Aleatória</option>
+    </select>
+    <input id="pixKey" placeholder="Informe a chave Pix">
     <button onclick="withdraw()">Sacar</button>
     <div id="saq"></div>
   </div>
@@ -99,15 +106,12 @@ async function deposit() {
 
   let html = `<p><b>Status:</b> ${j.status || 'pending'}</p>`;
 
-  // QR Code como URL
   if (j.pixQrCode) {
     html += `<p><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px"></p>`;
   }
-  // QR Code em base64
   if (j.qr_code_base64) {
     html += `<p><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px"></p>`;
   }
-  // Pix Copia e Cola
   if (j.pixCopiaCola) {
     html += `
       <p><b>Copia e Cola:</b></p>
@@ -115,7 +119,6 @@ async function deposit() {
       <button onclick="copyCopiaCola()">Copiar código</button>
     `;
   }
-  // Link de checkout
   if (j.checkoutUrl) {
     html += `<p><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a></p>`;
   }
@@ -126,7 +129,7 @@ async function deposit() {
 function copyCopiaCola() {
   const textarea = document.getElementById('copiaCola');
   textarea.select();
-  textarea.setSelectionRange(0, 99999); // para mobile
+  textarea.setSelectionRange(0, 99999);
   document.execCommand('copy');
   alert('Código Pix copiado!');
 }
@@ -134,15 +137,23 @@ function copyCopiaCola() {
 async function withdraw() {
   if (!userId) return alert('Faça login');
   const reais = Number(document.getElementById('saqAmount').value);
-  const destination = document.getElementById('dest').value.trim();
-  if (!reais || reais <= 0) return alert('Informe um valor válido');
-  if (!destination) return alert('Informe o destino');
+  const pixType = document.getElementById('pixType').value;
+  const pixKey = document.getElementById('pixKey').value.trim();
+
+  if (!reais || reais < 10) return alert('O valor mínimo para saque é R$ 10,00');
+  if (!pixKey) return alert('Informe a chave Pix');
+
   const amount = Math.floor(reais * 100);
 
   const r = await fetch(`${API}/payout`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email: userId, amount, destination, currency: 'BRL' })
+    body: JSON.stringify({
+      email: userId,
+      amount,
+      currency: 'BRL',
+      destination: { type: pixType, key: pixKey }
+    })
   });
 
   const j = await r.json();
