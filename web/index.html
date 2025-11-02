@@ -60,9 +60,10 @@
   </div>
 
 <script>
-const API = ''; // coloque aqui a URL do backend no Render, ex: "https://seuapp.onrender.com"
+const API = 'https://SEUAPP.onrender.com'; // coloque aqui a URL do backend no Render
 
 let userId = null;
+let userEmail = null;
 
 async function login() {
   const email = document.getElementById('email').value.trim();
@@ -78,6 +79,7 @@ async function login() {
   if (!r.ok) return alert(j.error || 'Erro no login');
 
   userId = j.userId;
+  userEmail = j.email;
   document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
 }
 
@@ -86,19 +88,18 @@ async function wallet() {
   const r = await fetch(`${API}/wallet/${userId}`);
   const j = await r.json();
   if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
-  document.getElementById('wallet').innerText = `Saldo: R$ ${(j.balance/100).toFixed(2)} | Em processamento: R$ ${(j.hold/100).toFixed(2)}`;
+  document.getElementById('wallet').innerText = `Saldo: R$ ${j.balance.toFixed(2)} | Em processamento: R$ ${j.hold.toFixed(2)}`;
 }
 
 async function deposit() {
   if (!userId) return alert('Faça login');
   const reais = Number(document.getElementById('depAmount').value);
   if (!reais || reais < 5) return alert('O valor mínimo para depósito é R$ 5,00');
-  const amount = Math.floor(reais * 100); // centavos
 
   const r = await fetch(`${API}/deposit`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email: userId, amount, currency: 'BRL' })
+    body: JSON.stringify({ email: userEmail, amount: reais, currency: 'BRL' })
   });
 
   const j = await r.json();
@@ -143,14 +144,12 @@ async function withdraw() {
   if (!reais || reais < 10) return alert('O valor mínimo para saque é R$ 10,00');
   if (!pixKey) return alert('Informe a chave Pix');
 
-  const amount = Math.floor(reais * 100);
-
   const r = await fetch(`${API}/payout`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
-      email: userId,
-      amount,
+      email: userEmail,
+      amount: reais,
       currency: 'BRL',
       destination: { type: pixType, key: pixKey }
     })
@@ -162,7 +161,23 @@ async function withdraw() {
 }
 
 async function bet() {
-  alert('A rota de aposta ainda não foi implementada no backend.');
+  if (!userId) return alert('Faça login');
+  const reais = Number(document.getElementById('betAmount').value);
+  const betType = document.getElementById('betType').value;
+  const betValue = document.getElementById('betValue').value.trim();
+
+  if (!reais || reais <= 0) return alert('Informe um valor válido para aposta');
+
+  const r = await fetch(`${API}/bet`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ userId, amount: reais, betType, betValue })
+  });
+
+  const j = await r.json();
+  if (!r.ok) return alert(j.error || 'Erro na aposta');
+
+  document.getElementById('bet').innerText = `Número sorteado: ${j.outcome} | Ganhou: R$ ${j.win.toFixed(2)} | Saldo final: R$ ${j.finalBalance.toFixed(2)}`;
 }
 </script>
 </body>
