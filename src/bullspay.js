@@ -33,7 +33,7 @@ export async function createPaymentIntent({ amount, currency, userRef }) {
   const data = await resp.json();
 
   // Log para debug (veja no Render)
-  console.log("Resposta BullsPay:", JSON.stringify(data, null, 2));
+  console.log("Resposta BullsPay (deposit):", JSON.stringify(data, null, 2));
 
   // Normaliza os campos para o front
   return {
