@@ -151,7 +151,9 @@ async function login() {
   document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
   wallet();
 }
-
+  </script>
+  
+  <script>
 // Carteira
 async function wallet() {
   if (!userId) return alert('Faça login');
@@ -233,20 +235,20 @@ async function withdraw() {
   if (!r.ok) return alert(j.error || 'Erro no saque');
   document.getElementById('saq').innerText = `Payout: ${j.gateway_id || ''} (${j.status})`;
 }
-  </script>
+</script>
 
-  <div class="card">
-    <h3>Histórico de Transações</h3>
-    <button class="btn-primary" onclick="loadTransactions()">Carregar histórico</button>
-    <table>
-      <thead>
-        <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
-      </thead>
-      <tbody id="txBody"></tbody>
-    </table>
-  </div>
+<div class="card">
+  <h3>Histórico de Transações</h3>
+  <button class="btn-primary" onclick="loadTransactions()">Carregar histórico</button>
+  <table>
+    <thead>
+      <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
+    </thead>
+    <tbody id="txBody"></tbody>
+  </table>
+</div>
 
-  <script>
+<script>
 let currentPrize = 0;
 
 // Inicia raspadinha
@@ -254,7 +256,7 @@ function playScratch() {
   if (!userId) return alert('Faça login');
   // Simulação local de prêmios (pode ser substituído por chamada ao backend)
   const pool = [0,0,0,0,1,2,5,10,20,50];
-  currentPrize = pool[Math.floor(Math.random()*pool.length)];
+  currentPrize = pool[Math.floor(Math.random() * pool.length)];
   document.getElementById('prizeText').innerText = `R$ ${currentPrize.toFixed(2)}`;
   document.getElementById('prizeLabel').innerText = 'Raspe para revelar';
   resetScratch();
@@ -268,34 +270,38 @@ function resetScratch() {
   resetMask();
 }
 
+<script>
 // Canvas raspadinha
 const canvas = document.getElementById('scratch');
 const ctx = canvas.getContext('2d');
-function resizeCanvas(){
+
+function resizeCanvas() {
   const rect = canvas.parentElement.getBoundingClientRect();
   canvas.width = rect.width;
   canvas.height = rect.height;
   resetMask();
 }
-function resetMask(){
+
+function resetMask() {
   ctx.fillStyle = '#c0c0c0';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
+
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-let isDown=false;
-canvas.addEventListener('mousedown', e=>{ isDown=true; scratch(e); });
-canvas.addEventListener('mousemove', e=>{ if(isDown) scratch(e); });
-window.addEventListener('mouseup', ()=> isDown=false);
+let isDown = false;
+canvas.addEventListener('mousedown', e => { isDown = true; scratch(e); });
+canvas.addEventListener('mousemove', e => { if (isDown) scratch(e); });
+window.addEventListener('mouseup', () => isDown = false);
 
-function scratch(e){
+function scratch(e) {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   ctx.globalCompositeOperation = 'destination-out';
   ctx.beginPath();
-  ctx.arc(x,y,20,0,Math.PI*2);
+  ctx.arc(x, y, 20, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
 }
@@ -319,6 +325,6 @@ async function loadTransactions() {
   document.getElementById('txBody').innerHTML =
     rows || '<tr><td colspan="4">Sem transações</td></tr>';
 }
-  </script>
+</script>
 </body>
 </html>
