@@ -14,7 +14,11 @@ dotenv.config();
 const app = express();
 
 // CORS e parsing
-app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
+app.use(cors({
+  origin: '*',
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
 app.use(bodyParser.json({ limit: '1mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -34,7 +38,7 @@ function toCents(v) {
 }
 // Util: exibir centavos como reais
 function fromCents(c) {
-  return Math.round(Number(c)) / 100;
+  return Number(c) / 100;
 }
 
 // Helpers
@@ -76,7 +80,10 @@ app.post('/login', async (req, res) => {
 app.get('/wallet/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const result = await pool.query('SELECT balance, hold FROM wallets WHERE user_id = $1', [userId]);
+    const result = await pool.query(
+      'SELECT balance, hold FROM wallets WHERE user_id = $1',
+      [userId]
+    );
     if (!result.rows.length) return res.status(404).json({ error: 'Carteira não encontrada' });
 
     const { balance, hold } = result.rows[0];
@@ -91,7 +98,12 @@ app.get('/wallet/:userId', async (req, res) => {
 app.post('/deposit', async (req, res) => {
   try {
     const { email, amount, currency } = req.body;
-    if (!email || !amount) return res.status(400).json({ error: 'E-mail e amount são obrigatórios' });
+    if (!email || !amount) {
+      return res.status(400).json({ error: 'E-mail e amount são obrigatórios' });
+    }
+    if (amount <= 5) {
+      return res.status(400).json({ error: 'O valor mínimo para depósito é R$ 6,00' });
+    }
 
     const userId = await getOrCreateUser(email);
 
@@ -128,14 +140,19 @@ app.post('/deposit', async (req, res) => {
 app.post('/payout', async (req, res) => {
   try {
     const { email, amount, currency, destination } = req.body;
-    if (!email || !amount || !destination) return res.status(400).json({ error: 'E-mail, amount e destino são obrigatórios' });
+    if (!email || !amount || !destination) {
+      return res.status(400).json({ error: 'E-mail, amount e destino são obrigatórios' });
+    }
 
     const userId = await getOrCreateUser(email);
 
     const cents = toCents(amount);
     const w = await pool.query('SELECT balance FROM wallets WHERE user_id=$1', [userId]);
     if (!w.rows.length) return res.status(404).json({ error: 'Carteira não encontrada' });
-    if (Number(w.rows[0].balance) < cents) return res.status(400).json({ error: 'Saldo insuficiente' });
+    if (Number(w.rows[0].balance) < cents) {
+      return res.status(400).json({ error: 'Saldo insuficiente' });
+    }
+
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
     const payoutData = await createPayout({
@@ -214,19 +231,25 @@ app.post('/bet', async (req, res) => {
   }
 });
 
+// ===================== Jogos =====================
+
 // Caça-níquel com RTP
 app.post('/games/:gameId/play', async (req, res) => {
   try {
     const { gameId } = req.params;
     const { userId, amount } = req.body;
-    if (!userId || !amount) return res.status(400).json({ error: 'Parâmetros obrigatórios: userId e amount' });
+    if (!userId || !amount) {
+      return res.status(400).json({ error: 'Parâmetros obrigatórios: userId e amount' });
+    }
 
     const cents = toCents(amount);
     if (cents <= 0) return res.status(400).json({ error: 'Valor de aposta inválido' });
 
     const w = await pool.query('SELECT balance FROM wallets WHERE user_id=$1', [userId]);
     if (!w.rows.length) return res.status(404).json({ error: 'Carteira não encontrada' });
-    if (Number(w.rows[0].balance) < cents) return res.status(400).json({ error: 'Saldo insuficiente' });
+    if (Number(w.rows[0].balance) < cents) {
+      return res.status(400).json({ error: 'Saldo insuficiente' });
+    }
 
     // Debita aposta
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
