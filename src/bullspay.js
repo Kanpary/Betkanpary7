@@ -75,4 +75,154 @@ function extractPixInfo(data = {}) {
  */
 function toCentsLocal(v) {
   const n = Number(v);
-  if (Number.isNaN(n) || n <= 0
+  if (Number.isNaN(n) || n <= 0) return 0;
+  // se inteiro e maior que 1000, assume centavos já
+  if (Number.isInteger(n) && Math.abs(n) > 1000) return n;
+  return Math.round(n * 100);
+}
+
+/**
+ * Cria um payment intent (PIX) na BullsPay
+ * @param {{amount:number|string, currency?:string, userRef?:string, buyer?:object}} opts
+ */
+export async function createPaymentIntent({ amount, currency = 'BRL', userRef, buyer = {} } = {}) {
+  ensureEnv();
+
+  if (!amount) throw new Error('Amount é obrigatório');
+
+  const cents = toCentsLocal(amount);
+  if (cents <= 0) throw new Error('Amount inválido');
+
+  const postbackUrl = `${BASE_URL}/webhook/bullspay`;
+
+  const payload = {
+    amount: cents,
+    currency,
+    external_id: `${userRef || 'u'}-${Date.now()}`,
+    payment_method: 'pix',
+    postback_url: postbackUrl,
+    buyer_infos: {
+      buyer_name: buyer.buyer_name || buyer.name || 'Cliente',
+      buyer_email: buyer.buyer_email || buyer.email || 'cliente@example.com',
+      buyer_document: buyer.buyer_document || buyer.document || '',
+      buyer_phone: buyer.buyer_phone || buyer.phone || ''
+    }
+  };
+
+  const fetchFn = await getFetch();
+
+  const resp = await fetchFn('https://api-gateway.bullspay.com.br/api/transactions/create', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Public-Key': process.env.BULLSPAY_CLIENT_ID,
+      'X-Private-Key': process.env.BULLSPAY_API_KEY
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!resp.ok) {
+    let errorText = '';
+    try {
+      errorText = await resp.text();
+    } catch (e) {
+      errorText = '<não foi possível ler corpo do erro>';
+    }
+    console.error('BullsPay (createPaymentIntent) respondeu não-ok:', resp.status, errorText);
+    throw new Error(`BullsPay error ${resp.status}: ${errorText}`);
+  }
+
+  const data = await resp.json().catch(() => ({}));
+  console.log('Resposta BullsPay (deposit):', JSON.stringify(data, null, 2));
+
+  const pixInfo = extractPixInfo(data);
+
+  const gatewayId =
+    data?.data?.payment_data?.id ||
+    data?.data?.id ||
+    data?.gateway_id ||
+    data?.data?.payment_id ||
+    null;
+
+  const status = data?.data?.payment_data?.status || data?.data?.status || data?.status || 'pending';
+
+  return {
+    gateway_id: gatewayId,
+    status,
+    pixQrCode: pixInfo.qrcode,
+    qr_code_base64: pixInfo.qrcodeBase64,
+    pixCopiaCola: pixInfo.copiaCola,
+    checkoutUrl: data?.data?.checkoutUrl || data?.checkout_url || null,
+    raw: data
+  };
+}
+
+/**
+ * Cria um payout/withdrawal (saque) via BullsPay
+ * @param {{amount:number|string, currency?:string, userRef?:string, destination:{type:string,key:string}}} opts
+ */
+export async function createPayout({ amount, currency = 'BRL', userRef, destination } = {}) {
+  ensureEnv();
+
+  if (!amount) throw new Error('Amount é obrigatório');
+  if (!destination || !destination.type || !destination.key) throw new Error('Destination inválido');
+
+  const cents = toCentsLocal(amount);
+  if (cents <= 0) throw new Error('Amount inválido');
+
+  const postbackUrl = `${BASE_URL}/webhook/bullspay`;
+
+  const body = {
+    amount: cents,
+    currency,
+    external_id: `${userRef || 'u'}-${Date.now()}`,
+    payment_method: 'pix',
+    postback_url: postbackUrl,
+    pix_key_type: destination.type,
+    pix_key: destination.key
+  };
+
+  const fetchFn = await getFetch();
+
+  const resp = await fetchFn('https://api-gateway.bullspay.com.br/api/withdrawals/request', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-Public-Key': process.env.BULLSPAY_CLIENT_ID,
+      'X-Private-Key': process.env.BULLSPAY_API_KEY
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!resp.ok) {
+    let errorText = '';
+    try {
+      errorText = await resp.text();
+    } catch (e) {
+      errorText = '<não foi possível ler corpo do erro>';
+    }
+    console.error('BullsPay (createPayout) respondeu não-ok:', resp.status, errorText);
+    throw new Error(`BullsPay error ${resp.status}: ${errorText}`);
+  }
+
+  const data = await resp.json().catch(() => ({}));
+  console.log('Resposta BullsPay (withdrawal):', JSON.stringify(data, null, 2));
+
+  const gatewayId =
+    data?.data?.withdrawal_id ||
+    data?.data?.id ||
+    data?.data?.unic_id ||
+    data?.gateway_id ||
+    null;
+
+  const status = data?.data?.status || data?.status || 'pending';
+
+  return {
+    gateway_id: gatewayId,
+    status,
+    raw: data
+  };
+}
+  
