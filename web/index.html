@@ -17,8 +17,6 @@
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
       background:#0f1218; color:var(--text);
     }
-
-    /* Cartões básicos (mantidos do projeto para não quebrar) */
     .card { background:#181c25; border:1px solid var(--border); padding:12px; border-radius:8px; margin-bottom:12px }
     textarea { width:100%; }
     button { margin-top:6px; padding:6px 12px; border:none; border-radius:4px; cursor:pointer }
@@ -29,8 +27,6 @@
     table { width:100%; border-collapse:collapse; margin-top:10px }
     th, td { border:1px solid var(--border); padding:6px; text-align:center }
     th { background:#222; }
-
-    /* Marca e raspadinha visual */
     .brand { display:flex; align-items:center; gap:10px; margin-bottom:12px }
     .logo{
       width:32px; height:32px; border-radius:8px;
@@ -38,7 +34,6 @@
       box-shadow: 0 0 16px #7c4dff33;
     }
     .title { font-size:20px; font-weight:800; letter-spacing:.3px }
-
     .scratch-card{
       position:relative; border-radius:14px; overflow:hidden;
       background: radial-gradient(600px 300px at 50% 0%, #1b2140, #12182f);
@@ -55,13 +50,10 @@
       text-shadow: 0 2px 12px #0006;
     }
     .sub{ color:#b7c0d1; font-weight:600 }
-    canvas#scratch{ position:absolute; inset:0; z-index:2; cursor:crosshair; }
-
+    canvas#scratch{ position:absolute; inset:0; z-index:2; cursor:crosshair; touch-action:none }
     .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
     .tag { background:#ffffff10; padding:6px 10px; border-radius:999px; border:1px solid #ffffff14; color:#b8c1d1; font-size:13px }
     .balance { font-weight:700; color:#dfe6f3 }
-
-    /* Confete simples */
     .confetti { position:fixed; inset:0; pointer-events:none; z-index:999; display:none }
   </style>
 </head>
@@ -114,6 +106,13 @@
       </div>
       <canvas id="scratch"></canvas>
     </div>
+
+    <div style="margin-top:8px">
+      <label>Aposta:
+        <input id="betAmount" type="number" value="1.00" min="0.2" max="30" step="0.01" style="width:100px">
+      </label>
+    </div>
+
     <div class="actions">
       <span class="tag">Saldo: <span class="balance" id="balance">R$ 0,00</span></span>
       <button class="btn-primary" onclick="playScratch()">Raspar agora</button>
@@ -121,96 +120,145 @@
     </div>
   </div>
 
-  <!-- Confete -->
+  <div class="card">
+    <h3>Histórico (últimas 10)</h3>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
+      </thead>
+      <tbody id="txBody">
+        <tr><td colspan="4">Sem transações</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <canvas class="confetti" id="confetti"></canvas>
 
-  <script>
+<script>
 const API = 'https://kanparycasino.onrender.com'; // URL do backend
 let userId = null;
 let userEmail = null;
 
-// Util
-const fmt = v => v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+// util
+const fmt = v => (typeof v === 'number') ? v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' }) : v;
 
-// Login
+// login
 async function login() {
   const email = document.getElementById('email').value.trim();
   if (!email) return alert('Informe seu e-mail');
 
-  const r = await fetch(`${API}/login`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email })
-  });
+  try {
+    const r = await fetch(`${API}/login`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email })
+    });
+    const j = await r.json();
+    if (!r.ok) return alert(j.error || 'Erro no login');
 
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro no login');
-
-  userId = j.userId;
-  userEmail = j.email;
-  document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
-  wallet();
+    userId = j.userId;
+    userEmail = j.email;
+    document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
+    wallet();
+    loadTransactions();
+  } catch (err) {
+    console.error(err);
+    alert('Erro de rede ao efetuar login');
+  }
 }
-  </script>
-  
-  <script>
-// Carteira
+
+// wallet (padronização: trata tanto respostas em reais quanto em centavos)
 async function wallet() {
   if (!userId) return alert('Faça login');
-  const r = await fetch(`${API}/wallet/${userId}`);
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
-  document.getElementById('wallet').innerText =
-    `Saldo: R$ ${j.balance.toFixed(2)} | Em processamento: R$ ${j.hold.toFixed(2)}`;
-  document.getElementById('balance').innerText = fmt(j.balance);
+  try {
+    const r = await fetch(`${API}/wallet/${userId}`);
+    const j = await r.json();
+    if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
+
+    // Heurística de detecção: se API retorna "balance_cents" use isso; senão tenta detectar cents por valor muito grande ou inteiro
+    let balance = 0;
+    if (typeof j.balance_cents === 'number') {
+      balance = j.balance_cents / 100;
+    } else if (typeof j.balance === 'number') {
+      // se for inteiro e > 1000 provavelmente está em centavos
+      if (Number.isInteger(j.balance) && Math.abs(j.balance) > 1000) {
+        balance = j.balance / 100;
+      } else {
+        balance = j.balance; // já em reais
+      }
+    } else {
+      // fallback: se string, tenta parse
+      balance = parseFloat(j.balance) || 0;
+    }
+
+    const hold = (typeof j.hold === 'number') ? (j.hold/ ( (j.hold > 1000 && Number.isInteger(j.hold)) ? 100 : 1 )) : (j.hold || 0);
+
+    document.getElementById('wallet').innerText =
+      `Saldo: ${fmt(balance)} | Em processamento: ${fmt(hold)}`;
+
+    document.getElementById('balance').innerText = fmt(balance);
+  } catch (err) {
+    console.error(err);
+    alert('Erro de rede ao buscar carteira');
+  }
 }
 
-// Depósito
+// deposit
 async function deposit() {
   if (!userId) return alert('Faça login');
   const reais = Number(document.getElementById('depAmount').value);
   if (!reais || reais < 6) return alert('O valor mínimo para depósito é R$ 6,00');
 
-  const r = await fetch(`${API}/deposit`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ email: userEmail, amount: reais, currency: 'BRL' })
-  });
+  try {
+    const r = await fetch(`${API}/deposit`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: userEmail, amount: reais, currency: 'BRL' })
+    });
+    const j = await r.json();
+    if (!r.ok) return alert(j.error || 'Erro no depósito');
 
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro no depósito');
+    let html = `<p><b>Status:</b> ${j.status || 'pending'}</p>`;
 
-  let html = `<p><b>Status:</b> ${j.status || 'pending'}</p>`;
+    if (j.pixQrCode) {
+      html += `<p><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px"></p>`;
+    }
+    if (j.qr_code_base64) {
+      html += `<p><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px"></p>`;
+    }
+    if (j.pixCopiaCola) {
+      html += `
+        <p><b>Copia e Cola:</b></p>
+        <textarea id="copiaCola" readonly style="width:100%;height:80px">${j.pixCopiaCola}</textarea>
+        <button onclick="copyCopiaCola()">Copiar código</button>
+      `;
+    }
+    if (j.checkoutUrl) {
+      html += `<p><a href="${j.checkoutUrl}" target="_blank" rel="noopener">Abrir checkout</a></p>`;
+    }
 
-  if (j.pixQrCode) {
-    html += `<p><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px"></p>`;
+    document.getElementById('dep').innerHTML = html;
+  } catch (err) {
+    console.error(err);
+    alert('Erro de rede ao criar depósito');
   }
-  if (j.qr_code_base64) {
-    html += `<p><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px"></p>`;
-  }
-  if (j.pixCopiaCola) {
-    html += `
-      <p><b>Copia e Cola:</b></p>
-      <textarea id="copiaCola" readonly style="width:100%;height:80px">${j.pixCopiaCola}</textarea>
-      <button onclick="copyCopiaCola()">Copiar código</button>
-    `;
-  }
-  if (j.checkoutUrl) {
-    html += `<p><a href="${j.checkoutUrl}" target="_blank">Abrir checkout</a></p>`;
-  }
-
-  document.getElementById('dep').innerHTML = html;
 }
 
-function copyCopiaCola() {
+async function copyCopiaCola() {
   const textarea = document.getElementById('copiaCola');
-  textarea.select();
-  textarea.setSelectionRange(0, 99999);
-  document.execCommand('copy');
-  alert('Código Pix copiado!');
+  if (!textarea) return;
+  try {
+    await navigator.clipboard.writeText(textarea.value);
+    alert('Código Pix copiado!');
+  } catch (err) {
+    // fallback
+    textarea.select();
+    document.execCommand && document.execCommand('copy');
+    alert('Código Pix copiado (fallback)!');
+  }
 }
 
-// Saque
+// withdraw
 async function withdraw() {
   if (!userId) return alert('Faça login');
   const reais = Number(document.getElementById('saqAmount').value);
@@ -220,123 +268,166 @@ async function withdraw() {
   if (!reais || reais < 10) return alert('O valor mínimo para saque é R$ 10,00');
   if (!pixKey) return alert('Informe a chave Pix');
 
-  const r = await fetch(`${API}/payout`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({
-      email: userEmail,
-      amount: reais,
-      currency: 'BRL',
-      destination: { type: pixType, key: pixKey }
-    })
-  });
-
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro no saque');
-  document.getElementById('saq').innerText = `Payout: ${j.gateway_id || ''} (${j.status})`;
+  try {
+    const r = await fetch(`${API}/payout`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        email: userEmail,
+        amount: reais,
+        currency: 'BRL',
+        destination: { type: pixType, key: pixKey }
+      })
+    });
+    const j = await r.json();
+    if (!r.ok) return alert(j.error || 'Erro no saque');
+    document.getElementById('saq').innerText = `Payout: ${j.gateway_id || ''} (${j.status})`;
+  } catch (err) {
+    console.error(err);
+    alert('Erro de rede ao solicitar saque');
+  }
 }
-</script>
 
-<div class="card">
-  <h3>Histórico de Transações</h3>
-  <button class="btn-primary" onclick="loadTransactions()">Carregar histórico</button>
-  <table>
-    <thead>
-      <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
-    </thead>
-    <tbody id="txBody"></tbody>
-  </table>
-</div>
+// transactions (única definição)
+async function loadTransactions() {
+  if (!userId) return; // não interrompe com alert repetido — chamadas automáticas podem ser feitas sem login
+  try {
+    const r = await fetch(`${API}/transactions/${userId}?limit=10`);
+    const j = await r.json();
+    if (!r.ok) return alert(j.error || 'Erro ao buscar histórico');
 
-<script>
+    const rows = (j.items || []).map(tx => {
+      // Detecta se tx.amount está em centavos (valor inteiro grande)
+      let amount = tx.amount;
+      if (Number.isInteger(amount) && Math.abs(amount) > 1000) amount = amount / 100;
+      else amount = (amount/ (amount > 1000 && Number.isInteger(amount) ? 100 : 1));
+      let balAfter = tx.balance_after;
+      if (Number.isInteger(balAfter) && Math.abs(balAfter) > 1000) balAfter = balAfter / 100;
+      else balAfter = (balAfter / (balAfter > 1000 && Number.isInteger(balAfter) ? 100 : 1));
+
+      return `
+        <tr>
+          <td>${new Date(tx.created_at).toLocaleString('pt-BR')}</td>
+          <td>${tx.type}</td>
+          <td>${fmt(amount)}</td>
+          <td>${fmt(balAfter)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    document.getElementById('txBody').innerHTML =
+      rows || '<tr><td colspan="4">Sem transações</td></tr>';
+  } catch (err) {
+    console.error(err);
+    // não poluir com alerts constantes; só log
+    document.getElementById('txBody').innerHTML = '<tr><td colspan="4">Erro ao carregar transações</td></tr>';
+  }
+}
+
+// ================== Raspadinha ==================
 let currentPrize = 0;
 
-<script>
-// Função da raspadinha
-function playScratch() {
+// canvas raspadinha
+const canvas = document.getElementById('scratch');
+const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
+
+function resizeCanvas() {
+  if (!canvas) return;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  // Ajuste para devicePixelRatio para melhor nitidez
+  const dpr = window.devicePixelRatio || 1;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  resetMask();
+}
+
+function resetMask() {
+  if (!ctx) return;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#c0c0c0';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+// inicializa
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// pointer (funciona para mouse + touch)
+let isDown = false;
+if (canvas) {
+  canvas.addEventListener('pointerdown', e => { isDown = true; canvas.setPointerCapture(e.pointerId); scratch(e); });
+  canvas.addEventListener('pointermove', e => { if (isDown) scratch(e); });
+  canvas.addEventListener('pointerup', e => { isDown = false; try { canvas.releasePointerCapture(e.pointerId); } catch(_){} });
+  canvas.addEventListener('pointercancel', () => isDown = false);
+}
+
+function scratch(e) {
+  if (!ctx || !canvas) return;
+  // coordenadas relativas ao elemento (considerando estilos)
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left);
+  const y = (e.clientY - rect.top);
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath();
+  ctx.arc(x, y, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// Abrir jogo: chama /scratch/play e revela
+async function playScratch() {
   if (!userId) return alert('Faça login');
 
-  const aposta = Number(document.getElementById('depAmount').value);
-  if (aposta < 0.20 || aposta > 30) {
+  const aposta = Number(document.getElementById('betAmount').value);
+  if (!aposta || aposta < 0.20 || aposta > 30) {
     return alert('A aposta deve ser entre R$ 0,20 e R$ 30,00');
   }
 
-  // Multiplicadores possíveis
-  const pool = [0, 0.5, 1, 2, 5, 10, 20];
-  const mult = pool[Math.floor(Math.random() * pool.length)];
-  const premio = aposta * mult;
+  try {
+    const r = await fetch(`${API}/scratch/play`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ userId, bet: aposta })
+    });
+    const j = await r.json();
+    if (!r.ok) return alert(j.error || 'Erro na raspadinha');
 
-  // Atualiza interface com o valor real
-  document.getElementById('prizeText').innerText = `R$ ${premio.toFixed(2)}`;
-  document.getElementById('prizeLabel').innerText = '';
+    currentPrize = j.prize || 0;
 
-  // Revela tudo de uma vez
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById('prizeText').innerText = `R$ ${Number(currentPrize).toFixed(2)}`;
+    document.getElementById('prizeLabel').innerText = '';
+    if (typeof j.finalBalance === 'number') {
+      document.getElementById('balance').innerText = fmt(j.finalBalance);
+    } else {
+      // se API retorna cents, faça ajuste conforme necessário
+      if (j.finalBalance_cents) document.getElementById('balance').innerText = fmt(j.finalBalance_cents/100);
+    }
+
+    // Revela tudo: limpa máscara (exibe conteúdo por baixo)
+    if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Atualiza histórico e carteira
+    loadTransactions();
+    wallet();
+  } catch (err) {
+    console.error(err);
+    alert('Erro de rede ao jogar raspadinha');
+  }
 }
 
-// Resetar raspadinha
 function resetScratch() {
   currentPrize = 0;
   document.getElementById('prizeText').innerText = 'R$ 0,00';
   document.getElementById('prizeLabel').innerText = 'Clique em “Raspar agora”';
   resetMask();
-}
-
-// Canvas raspadinha
-const canvas = document.getElementById('scratch');
-const ctx = canvas.getContext('2d');
-
-function resizeCanvas() {
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = rect.width;
-  canvas.height = rect.height;
-  resetMask();
-}
-
-function resetMask() {
-  ctx.fillStyle = '#c0c0c0';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-}
-
-resizeCanvas();
-window.addEventListener('resize', resizeCanvas);
-
-let isDown = false;
-canvas.addEventListener('mousedown', e => { isDown = true; scratch(e); });
-canvas.addEventListener('mousemove', e => { if (isDown) scratch(e); });
-window.addEventListener('mouseup', () => isDown = false);
-
-function scratch(e) {
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath();
-  ctx.arc(x, y, 20, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
-}
-</script>
-  
-// Histórico de transações
-async function loadTransactions() {
-  if (!userId) return alert('Faça login');
-  const r = await fetch(`${API}/transactions/${userId}?limit=10`);
-  const j = await r.json();
-  if (!r.ok) return alert(j.error || 'Erro ao buscar histórico');
-
-  const rows = j.items.map(tx => `
-    <tr>
-      <td>${new Date(tx.created_at).toLocaleString('pt-BR')}</td>
-      <td>${tx.type}</td>
-      <td>R$ ${(tx.amount/100).toFixed(2)}</td>
-      <td>R$ ${(tx.balance_after/100).toFixed(2)}</td>
-    </tr>
-  `).join('');
-
-  document.getElementById('txBody').innerHTML =
-    rows || '<tr><td colspan="4">Sem transações</td></tr>';
+  // atualiza UI
+  loadTransactions();
+  wallet();
 }
 </script>
 </body>
-</html>
+      </html>
+        
