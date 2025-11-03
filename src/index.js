@@ -1,4 +1,4 @@
-// index.js
+// src/index.js
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -12,7 +12,7 @@ dotenv.config();
 
 const app = express();
 
-// Middlewares (uso express.json em vez de body-parser para simplicidade)
+// Middlewares
 app.use(cors({
   // ATENÇÃO: em produção restrinja o origin em vez de usar '*'
   origin: '*',
@@ -45,10 +45,8 @@ function validateEmail(email) {
 }
 
 // Helper: get or create user (retorna userId)
-// Observação: se o banco já gera UUID por default, poderia delegar ao DB
 async function getOrCreateUser(email) {
   const id = uuidv4();
-  // Insere ou recupera o id do usuário com base no email
   const up = await pool.query(
     `INSERT INTO users (id, email)
      VALUES ($1, $2)
@@ -69,7 +67,7 @@ async function getOrCreateUser(email) {
   return userId;
 }
 
-// Inicialização (wrap para evitar top-level await issues em ambientes antigos)
+// Inicialização
 async function main() {
   await init();
 
@@ -123,6 +121,7 @@ async function main() {
       // Cria intent de pagamento via provider (retorna object com status, pixQrCode, id, etc)
       let paymentData;
       try {
+        // Passamos em centavos
         paymentData = await createPaymentIntent({
           amount: toCents(amount),
           currency: currency || 'BRL',
@@ -130,7 +129,8 @@ async function main() {
         });
       } catch (errProvider) {
         console.error('Erro ao criar payment intent:', errProvider);
-        return res.status(502).json({ error: 'Erro ao contatar gateway de pagamentos' });
+        // Em desenvolvimento podemos retornar detalhe: errProvider.message
+        return res.status(502).json({ error: 'Erro ao contatar gateway de pagamentos', detail: errProvider.message });
       }
 
       // Persistir registro do pagamento (manter raw para auditoria)
@@ -204,7 +204,7 @@ async function main() {
         await client.query('ROLLBACK');
         client.release();
         console.error('Erro ao criar payout:', errProvider);
-        return res.status(502).json({ error: 'Erro ao contatar gateway de pagamentos' });
+        return res.status(502).json({ error: 'Erro ao contatar gateway de pagamentos', detail: errProvider.message });
       }
 
       // Só debita se gateway retornou algo com status válido (ex.: created/processing)
@@ -307,7 +307,7 @@ async function main() {
     }
   });
 
-  // ===================== Webhook Bullspay (idempotência) =====================
+  // ===================== Webhook Bullspay (idempotência corrigida) =====================
   app.post('/webhook/bullspay', async (req, res) => {
     try {
       const payload = req.body;
@@ -321,7 +321,7 @@ async function main() {
         return res.status(400).json({ error: 'Transação inválida: id ausente' });
       }
 
-      // Busca pagamento associado a essa transação
+      // Busca pagamento associado a essa transação (para ler status ANTERIOR)
       const payQ = await pool.query(
         `SELECT id, user_id, amount, status FROM payments
          WHERE (raw->'data'->'payment_data'->>'id' = $1 OR raw->'data'->>'id' = $1) LIMIT 1`,
@@ -329,14 +329,14 @@ async function main() {
       );
 
       if (!payQ.rows.length) {
-        // Se não encontrou, apenas atualiza logs (não é fatal)
         console.warn('Pagamento não encontrado para transactionId:', transactionId);
-        // opcional: salvar um log separadamente
+        // opcional: salvar um log separado para investigação
         return res.json({ ok: true, note: 'payment_not_found' });
       }
 
       const paymentRow = payQ.rows[0];
       const paymentId = paymentRow.id;
+      const previousStatus = paymentRow.status ? String(paymentRow.status).toLowerCase() : null;
 
       // Atualiza raw + status
       await pool.query(
@@ -345,29 +345,24 @@ async function main() {
       );
 
       // Se status indica pago e ainda não foi creditado, credita carteira
-      if (String(status).toLowerCase() === 'paid' || String(status).toLowerCase() === 'confirmed') {
-        // Recarrega para garantir valor/estado atual (evita duplicate credit)
-        const chk = await pool.query('SELECT status, amount, user_id FROM payments WHERE id = $1', [paymentId]);
-        if (chk.rows.length) {
-          const p = chk.rows[0];
-          // Só credita se antes não estava em 'paid'
-          if (String(p.status).toLowerCase() === 'paid' || String(p.status).toLowerCase() === 'confirmed') {
-            // Já está como paid (pode ter sido atualizado agora) — evitar duplicação:
-            // Para segurança adicional, poderia manter um campo "credited boolean" na tabela payments.
-            console.log(`Pagamento ${paymentId} já marcado como ${p.status} — não creditar novamente.`);
-          } else {
-            // Credita wallet com amount (assumimos amount em centavos)
-            if (p.amount && p.user_id) {
-              await pool.query(
-                'UPDATE wallets SET balance = balance + $1 WHERE user_id = $2',
-                [p.amount, p.user_id]
-              );
-              console.log(`💰 Crédito realizado para usuário ${p.user_id}, valor R$ ${fromCents(p.amount)}`);
-            } else {
-              console.warn('Pagamento sem amount/user_id não credita automaticamente:', paymentId);
-            }
+      const newStatus = String(status).toLowerCase();
+      if ((newStatus === 'paid' || newStatus === 'confirmed') && previousStatus !== 'paid' && previousStatus !== 'confirmed') {
+        // Credita wallet com amount (assumimos amount em centavos)
+        if (paymentRow.amount && paymentRow.user_id) {
+          try {
+            await pool.query(
+              'UPDATE wallets SET balance = balance + $1 WHERE user_id = $2',
+              [paymentRow.amount, paymentRow.user_id]
+            );
+            console.log(`💰 Crédito realizado para usuário ${paymentRow.user_id}, valor R$ ${fromCents(paymentRow.amount)}`);
+          } catch (errCredit) {
+            console.error('Erro ao creditar wallet no webhook:', errCredit);
           }
+        } else {
+          console.warn('Pagamento sem amount/user_id não credita automaticamente:', paymentId);
         }
+      } else {
+        console.log(`Webhook recebido para pagamento ${paymentId}: status ${newStatus}, previous ${previousStatus} — sem crédito adicional.`);
       }
 
       res.json({ ok: true });
@@ -406,4 +401,3 @@ main().catch(err => {
   console.error('Erro ao iniciar aplicação:', err);
   process.exit(1);
 });
-           
