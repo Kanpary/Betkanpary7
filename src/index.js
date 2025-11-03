@@ -61,7 +61,7 @@ async function getOrCreateUser(email) {
     `INSERT INTO wallets (user_id, balance, hold)
      VALUES ($1, $2, $3)
      ON CONFLICT (user_id) DO NOTHING`,
-    [userId, 50000, 0]
+    [userId, 50000, 0] // troque 50000 por 0 se quiser começar zerado
   );
 
   return userId;
@@ -118,18 +118,16 @@ async function main() {
 
       const userId = await getOrCreateUser(email);
 
-      // Cria intent de pagamento via provider (retorna object com status, pixQrCode, id, etc)
+      // Cria intent de pagamento via provider
       let paymentData;
       try {
-        // Passamos em centavos
         paymentData = await createPaymentIntent({
-          amount: toCents(amount),
+          amount, // passa em reais, bullspay.js converte internamente
           currency: currency || 'BRL',
           userRef: userId
         });
       } catch (errProvider) {
         console.error('Erro ao criar payment intent:', errProvider);
-        // Em desenvolvimento podemos retornar detalhe: errProvider.message
         return res.status(502).json({ error: 'Erro ao contatar gateway de pagamentos', detail: errProvider.message });
       }
 
@@ -142,7 +140,6 @@ async function main() {
         );
       } catch (errDb) {
         console.error('Erro ao gravar pagamento:', errDb);
-        // Não aborta a resposta ao usuário — mas avisa nos logs
       }
 
       // Normalização dos campos de QR Code / copia e cola
@@ -163,7 +160,7 @@ async function main() {
     }
   });
 
-  // Criar saque (payout) — amount em reais
+// Criar saque (payout) — amount em reais
   app.post('/payout', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -195,7 +192,7 @@ async function main() {
       let payoutData;
       try {
         payoutData = await createPayout({
-          amount: cents,
+          amount, // passa em reais, bullspay.js converte internamente
           currency: currency || 'BRL',
           userRef: userId,
           destination
@@ -207,12 +204,10 @@ async function main() {
         return res.status(502).json({ error: 'Erro ao contatar gateway de pagamentos', detail: errProvider.message });
       }
 
-      // Só debita se gateway retornou algo com status válido (ex.: created/processing)
+      // Só debita se gateway retornou algo com status válido
       if (payoutData && payoutData.status) {
-        // deduz balance localmente (registro contábil)
         await client.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
-        // registra pagamento / payout
         await client.query(
           `INSERT INTO payments (user_id, amount, currency, type, status, raw)
            VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -232,7 +227,7 @@ async function main() {
     }
   });
 
-  // ===================== Jogo: Raspadinha (transacional, single route) =====================
+  // ===================== Jogo: Raspadinha =====================
   app.post('/scratch/play', async (req, res) => {
     const client = await pool.connect();
     try {
@@ -250,7 +245,6 @@ async function main() {
 
       await client.query('BEGIN');
 
-      // bloqueia linha do wallet para evitar race
       const wq = await client.query('SELECT balance FROM wallets WHERE user_id = $1 FOR UPDATE', [userId]);
       if (!wq.rows.length) {
         await client.query('ROLLBACK');
@@ -267,17 +261,15 @@ async function main() {
       // Debita aposta
       await client.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
-      // Lógica de prêmio (multipliers)
+      // Sorteio de prêmio
       const multipliers = [0, 0.5, 1, 2, 5, 10, 20];
       const mult = multipliers[Math.floor(Math.random() * multipliers.length)];
       const prize = Math.round(cents * mult);
 
-      // Credita prêmio se houver
       if (prize > 0) {
         await client.query('UPDATE wallets SET balance = balance + $1 WHERE user_id = $2', [prize, userId]);
       }
 
-      // Registra transação (opcional, para auditoria)
       try {
         await client.query(
           `INSERT INTO payments (user_id, amount, currency, type, status, raw)
@@ -286,7 +278,6 @@ async function main() {
         );
       } catch (errReg) {
         console.error('Erro ao registrar pagamento scratch:', errReg);
-        // Não abortamos a operação de jogo por falha de log
       }
 
       const finalBalance = balance - cents + prize;
@@ -307,13 +298,12 @@ async function main() {
     }
   });
 
-  // ===================== Webhook Bullspay (idempotência corrigida) =====================
+// ===================== Webhook Bullspay =====================
   app.post('/webhook/bullspay', async (req, res) => {
     try {
       const payload = req.body;
       console.log('Webhook BullsPay:', JSON.stringify(payload, null, 2));
 
-      // Extrair transaction id / status do payload (ajuste conforme formato real do provider)
       const transactionId = payload?.data?.payment_data?.id || payload?.data?.id || payload?.id;
       const status = payload?.data?.status || payload?.data?.payment_data?.status || payload?.status;
 
@@ -321,7 +311,6 @@ async function main() {
         return res.status(400).json({ error: 'Transação inválida: id ausente' });
       }
 
-      // Busca pagamento associado a essa transação (para ler status ANTERIOR)
       const payQ = await pool.query(
         `SELECT id, user_id, amount, status FROM payments
          WHERE (raw->'data'->'payment_data'->>'id' = $1 OR raw->'data'->>'id' = $1) LIMIT 1`,
@@ -330,7 +319,6 @@ async function main() {
 
       if (!payQ.rows.length) {
         console.warn('Pagamento não encontrado para transactionId:', transactionId);
-        // opcional: salvar um log separado para investigação
         return res.json({ ok: true, note: 'payment_not_found' });
       }
 
@@ -338,16 +326,14 @@ async function main() {
       const paymentId = paymentRow.id;
       const previousStatus = paymentRow.status ? String(paymentRow.status).toLowerCase() : null;
 
-      // Atualiza raw + status
       await pool.query(
         'UPDATE payments SET status = $1, raw = $2 WHERE id = $3',
         [status, JSON.stringify(payload), paymentId]
       );
 
-      // Se status indica pago e ainda não foi creditado, credita carteira
       const newStatus = String(status).toLowerCase();
-      if ((newStatus === 'paid' || newStatus === 'confirmed') && previousStatus !== 'paid' && previousStatus !== 'confirmed') {
-        // Credita wallet com amount (assumimos amount em centavos)
+      if ((newStatus === 'paid' || newStatus === 'confirmed') &&
+          previousStatus !== 'paid' && previousStatus !== 'confirmed') {
         if (paymentRow.amount && paymentRow.user_id) {
           try {
             await pool.query(
@@ -377,9 +363,8 @@ async function main() {
     res.json({ ok: true, ts: new Date().toISOString() });
   });
 
-  // SPA fallback: entrega index.html para rotas não-API
+  // SPA fallback
   app.get('*', (req, res, next) => {
-    // Se for rota de API, passa para o próximo handler
     const apiPrefixes = ['/login', '/wallet', '/deposit', '/payout', '/scratch', '/webhook', '/health'];
     for (const p of apiPrefixes) {
       if (req.path.startsWith(p)) return next();
