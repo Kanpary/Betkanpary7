@@ -30,7 +30,6 @@ router.post('/fxpay', async (req, res) => {
     const data = resp.data;
 
     // 3. Salva/atualiza o pagamento no banco
-    // Usamos transaction_id como identificador único
     await pool.query(
       `INSERT INTO payments (external_id, type, user_id, amount, currency, status, raw)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -40,19 +39,30 @@ router.post('/fxpay', async (req, res) => {
         payment_id || transaction_id,
         'payment',
         user_id,
-        data.amount,
-        data.currency,
+        data.amount, // ⚠️ certifique-se se vem em centavos ou reais
+        data.currency || 'BRL',
         data.status,
         JSON.stringify(data)
       ]
     );
 
-    // 4. Se aprovado, credita na carteira
+    // 4. Se aprovado, credita na carteira (idempotência simples)
     if (data.status === 'approved' || data.status === 'paid') {
-      await pool.query(
-        'UPDATE wallets SET balance = balance + $1 WHERE user_id = $2',
-        [data.amount, user_id]
+      const check = await pool.query(
+        'SELECT status FROM payments WHERE external_id = $1',
+        [payment_id || transaction_id]
       );
+      const currentStatus = check.rows[0]?.status;
+      if (currentStatus && currentStatus.toLowerCase() === data.status.toLowerCase()) {
+        // já está aprovado/pago, não credita de novo
+        console.log(`Webhook FXPay ignorado: pagamento ${payment_id || transaction_id} já está ${currentStatus}`);
+      } else {
+        await pool.query(
+          'UPDATE wallets SET balance = balance + $1 WHERE user_id = $2',
+          [data.amount, user_id]
+        );
+        console.log(`💰 Crédito realizado para usuário ${user_id}, valor ${data.amount}`);
+      }
     }
 
     // 5. Sempre responde 200 para o FXPay não reenviar
