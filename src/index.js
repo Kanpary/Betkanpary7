@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { createPaymentIntent, createPayout } from './bullspay.js';
 
@@ -11,9 +13,21 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Necessário para resolver __dirname em ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Middlewares
 app.use(cors());
 app.use(bodyParser.json());
+
+// ✅ Servir arquivos estáticos da pasta "web"
+app.use(express.static(path.join(__dirname, 'web')));
+
+// ✅ Rota raiz entrega o index.html da pasta "web"
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'web', 'index.html'));
+});
 
 // In-memory "database" simples para testes
 const users = {}; // { userId: { email, balance, hold, transactions: [] } }
@@ -44,11 +58,6 @@ app.get('/wallet/:userId', (req, res) => {
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
   res.json({ balance: user.balance, hold: user.hold });
-});
-
-// ✅ Health check / rota raiz
-app.get('/', (req, res) => {
-  res.json({ ok: true, message: 'API está no ar 🚀' });
 });
 
 // Endpoint de depósito
