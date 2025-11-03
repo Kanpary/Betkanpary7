@@ -46,6 +46,7 @@ app.get('/wallet/:userId', (req, res) => {
   res.json({ balance: user.balance, hold: user.hold });
 });
 
+// ✅ Health check / rota raiz
 app.get('/', (req, res) => {
   res.json({ ok: true, message: 'API está no ar 🚀' });
 });
