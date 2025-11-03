@@ -225,4 +225,3 @@ export async function createPayout({ amount, currency = 'BRL', userRef, destinat
     raw: data
   };
 }
-  
