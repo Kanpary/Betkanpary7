@@ -1,0 +1,62 @@
+/* ====== Reset básico ====== */
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #f8f9fa;
+  color: #333;
+}
+
+/* ====== Navbar ====== */
+.navbar-brand {
+  font-size: 1.4rem;
+  letter-spacing: 1px;
+}
+
+/* ====== Cards ====== */
+.card {
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.card-header {
+  font-weight: 600;
+}
+
+/* ====== Dashboard ====== */
+#balance {
+  color: #28a745; /* verde */
+}
+
+#hold {
+  color: #ffc107; /* amarelo */
+}
+
+/* ====== Botões ====== */
+.btn {
+  font-weight: 500;
+  border-radius: 6px;
+  transition: transform 0.1s ease-in-out;
+}
+
+.btn:hover {
+  transform: scale(1.03);
+}
+
+/* ====== Histórico ====== */
+#transactions .list-group-item {
+  font-size: 0.95rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ====== Footer ====== */
+footer {
+  font-size: 0.85rem;
+  letter-spacing: 0.5px;
+}
+
+/* ====== Alerts ====== */
+.alert {
+  border-radius: 8px;
+  font-weight: 500;
+}
