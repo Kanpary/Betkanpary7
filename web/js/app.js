@@ -1,5 +1,6 @@
 const API_URL = window.location.origin; // mesma origem do backend
 let currentUser = null;
+let transactionsChart = null;
 
 // Utilitário para formatar valores em R$
 function formatCurrency(value) {
@@ -138,6 +139,52 @@ document.getElementById('payoutForm').addEventListener('submit', async (e) => {
   }
 });
 
+// Atualizar gráfico de transações
+function updateChart(transactions) {
+  const ctx = document.getElementById('transactionsChart').getContext('2d');
+
+  const labels = transactions.map(tx => new Date(tx.created_at).toLocaleDateString('pt-BR'));
+  const values = transactions.map(tx => tx.amount);
+  const colors = transactions.map(tx => tx.type === 'deposit' ? 'rgba(40,167,69,0.7)' : 'rgba(220,53,69,0.7)');
+
+  if (transactionsChart) {
+    transactionsChart.destroy();
+  }
+
+  transactionsChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Valor (R$)',
+        data: values,
+        backgroundColor: colors,
+        borderColor: colors.map(c => c.replace('0.7', '1')),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => formatCurrency(context.raw)
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: (value) => formatCurrency(value)
+          }
+        }
+      }
+    }
+  });
+}
+
 // Histórico
 async function loadTransactions() {
   if (!currentUser) return;
@@ -157,4 +204,7 @@ async function loadTransactions() {
     `;
     list.appendChild(li);
   });
-}
+
+  // Atualizar gráfico com os dados em ordem cronológica
+  updateChart(data.items.reverse());
+        }
