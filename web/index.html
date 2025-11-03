@@ -1,433 +1,134 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <title>RaspadinhaKanpary</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    :root{
-      --bg:#0b0f1a; --card:#121725; --panel:#111626cc; --accent:#7c4dff;
-      --accent2:#21c17a; --text:#e6e6e6; --muted:#a9b0bd; --danger:#e74c3c;
-      --glass:rgba(255,255,255,0.06); --border:#2a2f3a;
-    }
-    *{ box-sizing:border-box }
-    html,body{ height:100% }
-    body{
-      margin:20px;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background:#0f1218; color:var(--text);
-    }
-    .card { background:#181c25; border:1px solid var(--border); padding:12px; border-radius:8px; margin-bottom:12px }
-    textarea { width:100%; }
-    button { margin-top:6px; padding:6px 12px; border:none; border-radius:4px; cursor:pointer }
-    button:hover { opacity:0.9 }
-    .btn-primary { background:#2d6cdf; color:#fff }
-    .btn-success { background:#21c17a; color:#fff }
-    .btn-danger { background:var(--danger); color:#fff }
-    table { width:100%; border-collapse:collapse; margin-top:10px }
-    th, td { border:1px solid var(--border); padding:6px; text-align:center }
-    th { background:#222; }
-    .brand { display:flex; align-items:center; gap:10px; margin-bottom:12px }
-    .logo{
-      width:32px; height:32px; border-radius:8px;
-      background: conic-gradient(from 220deg at 50% 50%, #7c4dff, #21c17a, #ffd76d, #7c4dff);
-      box-shadow: 0 0 16px #7c4dff33;
-    }
-    .title { font-size:20px; font-weight:800; letter-spacing:.3px }
-    .scratch-card{
-      position:relative; border-radius:14px; overflow:hidden;
-      background: radial-gradient(600px 300px at 50% 0%, #1b2140, #12182f);
-      border:1px solid #ffffff14; min-height:260px;
-    }
-    .scratch-content{
-      position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-      flex-direction:column; gap:8px; z-index:1; text-align:center; padding:20px;
-    }
-    .prize{
-      font-size:32px; font-weight:800;
-      background: linear-gradient(90deg, #ffd76d, #fff2a6);
-      -webkit-background-clip: text; background-clip: text; color: transparent;
-      text-shadow: 0 2px 12px #0006;
-    }
-    .sub{ color:#b7c0d1; font-weight:600 }
-    canvas#scratch{ position:absolute; inset:0; z-index:2; cursor:crosshair; touch-action:none }
-    .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
-    .tag { background:#ffffff10; padding:6px 10px; border-radius:999px; border:1px solid #ffffff14; color:#b8c1d1; font-size:13px }
-    .balance { font-weight:700; color:#dfe6f3 }
-    .confetti { position:fixed; inset:0; pointer-events:none; z-index:999; display:none }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kanpary Casino</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Estilo customizado -->
+  <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-  <div class="brand">
-    <div class="logo"></div>
-    <div class="title">RaspadinhaKanpary</div>
-  </div>
+<body class="bg-light">
 
-  <div class="card">
-    <input id="email" type="email" placeholder="Seu e-mail">
-    <button class="btn-primary" onclick="login()">Entrar</button>
-    <div id="user"></div>
-  </div>
+  <!-- Navbar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="#">🎰 Kanpary Casino</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" 
+              data-bs-target="#navbarNav" aria-controls="navbarNav" 
+              aria-expanded="false" aria-label="Alternar navegação">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+    </div>
+  </nav>
 
-  <div class="card">
-    <button class="btn-success" onclick="wallet()">Atualizar carteira</button>
-    <div id="wallet"></div>
-  </div>
-
-  <div class="card">
-    <h3>Depósito</h3>
-    <input id="depAmount" type="number" value="10" min="6" step="0.01">
-    <input id="depDocument" type="text" placeholder="CPF ou CNPJ do comprador">
-    <button class="btn-success" onclick="deposit()">Depositar</button>
-    <div id="dep"></div>
-  </div>
-
-  <div class="card">
-    <h3>Saque</h3>
-    <input id="saqAmount" type="number" value="20" min="10" step="0.01">
-    <select id="pixType">
-      <option value="cpf">CPF</option>
-      <option value="cnpj">CNPJ</option>
-      <option value="email">E-mail</option>
-      <option value="phone">Telefone</option>
-      <option value="random">Chave Aleatória</option>
-    </select>
-    <input id="pixKey" placeholder="Informe a chave Pix">
-    <button class="btn-danger" onclick="withdraw()">Sacar</button>
-    <div id="saq"></div>
-  </div>
-
-  <div class="card">
-    <h3>Raspadinha</h3>
-    <div class="scratch-card">
-      <div class="scratch-content" id="content">
-        <div class="sub">Seu prêmio</div>
-        <div class="prize" id="prizeText">R$ 0,00</div>
-        <div class="sub" id="prizeLabel">Clique em “Raspar agora”</div>
+  <!-- Container principal -->
+  <div class="container py-4">
+    <!-- Login -->
+    <div class="card mb-4">
+      <div class="card-header bg-primary text-white">Login</div>
+      <div class="card-body">
+        <form id="loginForm" class="row g-3">
+          <div class="col-md-6">
+            <label for="email" class="form-label">E-mail</label>
+            <input type="email" id="email" class="form-control" required>
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-success">Entrar</button>
+          </div>
+        </form>
       </div>
-      <canvas id="scratch"></canvas>
     </div>
 
-    <div style="margin-top:8px">
-      <label>Aposta:
-        <input id="betAmount" type="number" value="1.00" min="0.2" max="30" step="0.01" style="width:100px">
-      </label>
-    </div>
+    <!-- Dashboard -->
+    <div id="dashboard" class="d-none">
+      <div class="row">
+        <!-- Saldo -->
+        <div class="col-md-4 mb-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">Saldo</h5>
+              <p id="balance" class="fs-4 fw-bold text-success">R$ 0,00</p>
+            </div>
+          </div>
+        </div>
+        <!-- Em processamento -->
+        <div class="col-md-4 mb-3">
+          <div class="card text-center">
+            <div class="card-body">
+              <h5 class="card-title">Em processamento</h5>
+              <p id="hold" class="fs-4 fw-bold text-warning">R$ 0,00</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-    <div class="actions">
-      <span class="tag">Saldo: <span class="balance" id="balance">R$ 0,00</span></span>
-      <button class="btn-primary" onclick="playScratch()">Raspar agora</button>
-      <button class="btn" onclick="resetScratch()">Raspar de novo</button>
-    </div>
-  </div>
+      <!-- Formulários de ações -->
+      <div class="row">
+        <!-- Depósito -->
+        <div class="col-md-6 mb-3">
+          <div class="card">
+            <div class="card-header bg-success text-white">Depósito</div>
+            <div class="card-body">
+              <form id="depositForm" class="row g-3">
+                <div class="col-12">
+                  <label for="depositAmount" class="form-label">Valor (R$)</label>
+                  <input type="number" id="depositAmount" class="form-control" min="1" required>
+                </div>
+                <div class="col-12">
+                  <label for="buyerDocument" class="form-label">CPF/CNPJ</label>
+                  <input type="text" id="buyerDocument" class="form-control" required>
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-success w-100">Depositar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
 
-  <div class="card">
-    <h3>Histórico (últimas 10)</h3>
-    <table>
-      <thead>
-        <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
-      </thead>
-      <tbody id="txBody">
-        <tr><td colspan="4">Sem transações</td></tr>
-      </tbody>
-    </table>
-  </div>
+        <!-- Saque -->
+        <div class="col-md-6 mb-3">
+          <div class="card">
+            <div class="card-header bg-danger text-white">Saque</div>
+            <div class="card-body">
+              <form id="payoutForm" class="row g-3">
+                <div class="col-12">
+                  <label for="payoutAmount" class="form-label">Valor (R$)</label>
+                  <input type="number" id="payoutAmount" class="form-control" min="1" required>
+                </div>
+                <div class="col-12">
+                  <label for="destination" class="form-label">Destino (ex: chave PIX)</label>
+                  <input type="text" id="destination" class="form-control" required>
+                </div>
+                <div class="col-12">
+                  <button type="submit" class="btn btn-danger w-100">Sacar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
 
-  <canvas class="confetti" id="confetti"></canvas>
+      <!-- Histórico -->
+      <div class="card mt-4">
+        <div class="card-header bg-secondary text-white">Histórico de Transações</div>
+        <div class="card-body">
+          <ul id="transactions" class="list-group"></ul>
+        </div>
+      </div>
+    </div> <!-- fim dashboard -->
+  </div> <!-- fim container -->
 
-  <!-- Scripts começam aqui -->
-  <script>
-    const API = 'https://kanparycasino.onrender.com'; // URL do backend
-    let userId = null;
-    let userEmail = null;
+  <!-- Footer -->
+  <footer class="bg-dark text-white text-center py-3 mt-4">
+    <small>&copy; 2025 Kanpary Casino - Todos os direitos reservados</small>
+  </footer>
 
-    // util
-    const fmt = v => (typeof v === 'number')
-      ? v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
-      : v;
-
-    // login
-    async function login() {
-      const email = document.getElementById('email').value.trim();
-      if (!email) return alert('Informe seu e-mail');
-
-      try {
-        const r = await fetch(`${API}/login`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no login');
-
-        userId = j.userId;
-        userEmail = j.email;
-        document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
-        wallet();
-        loadTransactions();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao efetuar login');
-      }
-    }
-
-    // wallet
-    async function wallet() {
-      if (!userId) return alert('Faça login');
-      try {
-        const r = await fetch(`${API}/wallet/${userId}`);
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
-
-        const balance = j.balance || 0;
-        const hold = j.hold || 0;
-
-        document.getElementById('wallet').innerText =
-          `Saldo: ${fmt(balance)} | Em processamento: ${fmt(hold)}`;
-        document.getElementById('balance').innerText = fmt(balance);
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao buscar carteira');
-      }
-    }
-
-    // deposit
-    async function deposit() {
-      if (!userId) return alert('Faça login');
-      const reais = Number(document.getElementById('depAmount').value);
-      const documento = document.getElementById('depDocument').value.trim();
-      if (!reais || reais < 6) return alert('O valor mínimo para depósito é R$ 6,00');
-      if (!documento) return alert('Informe o CPF ou CNPJ do comprador');
-
-      try {
-        const r = await fetch(`${API}/deposit`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ 
-            email: userEmail, 
-            amount: reais, 
-            currency: 'BRL',
-            buyer_document: documento 
-          })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no depósito');
-
-        let html = `<p><b>Status:</b> ${j.status || 'pending'}</p>`;
-
-        if (j.pixQrCode) {
-          html += `<p><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px"></p>`;
-        }
-        if (j.qr_code_base64) {
-          html += `<p><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px"></p>`;
-        }
-        if (j.pixCopiaCola) {
-          html += `
-            <p><b>Copia e Cola:</b></p>
-            <textarea id="copiaCola" readonly style="width:100%;height:80px">${j.pixCopiaCola}</textarea>
-            <button onclick="copyCopiaCola()">Copiar código</button>
-          `;
-        }
-        if (j.checkoutUrl) {
-          html += `<p><a href="${j.checkoutUrl}" target="_blank" rel="noopener noreferrer">Abrir checkout</a></p>`;
-        }
-
-        document.getElementById('dep').innerHTML = html;
-
-        // Atualiza carteira e histórico
-        wallet();
-        loadTransactions();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao criar depósito');
-      }
-    }
-
-    async function copyCopiaCola() {
-      const textarea = document.getElementById('copiaCola');
-      if (!textarea) return;
-      try {
-        await navigator.clipboard.writeText(textarea.value);
-        alert('Código Pix copiado!');
-      } catch (err) {
-        textarea.select();
-        document.execCommand && document.execCommand('copy');
-        alert('Código Pix copiado (fallback)!');
-      }
-    }
-
-    // withdraw
-    async function withdraw() {
-      if (!userId) return alert('Faça login');
-      const reais = Number(document.getElementById('saqAmount').value);
-      const pixType = document.getElementById('pixType').value;
-      const pixKey = document.getElementById('pixKey').value.trim();
-
-      if (!reais || reais < 10) return alert('O valor mínimo para saque é R$ 10,00');
-      if (!pixKey) return alert('Informe a chave Pix');
-
-      try {
-        const r = await fetch(`${API}/payout`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            email: userEmail,
-            amount: reais,
-            currency: 'BRL',
-            destination: { type: pixType, key: pixKey }
-          })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no saque');
-        document.getElementById('saq').innerText = `Payout: ${j.gateway_id || ''} (${j.status})`;
-
-        // Atualiza carteira e histórico
-        wallet();
-        loadTransactions();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao solicitar saque');
-      }
-    }
-
-    // transactions
-    async function loadTransactions() {
-      if (!userId) return;
-      try {
-        const r = await fetch(`${API}/transactions/${userId}?limit=10`);
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro ao buscar histórico');
-
-        const rows = (j.items || []).map(tx => {
-          let amount = tx.amount;
-          if (Number.isInteger(amount) && Math.abs(amount) > 1000) amount = amount / 100;
-          let balAfter = tx.balance_after;
-          if (Number.isInteger(balAfter) && Math.abs(balAfter) > 1000) balAfter = balAfter / 100;
-
-          return `
-            <tr>
-              <td>${new Date(tx.created_at).toLocaleString('pt-BR')}</td>
-              <td>${tx.type}</td>
-              <td>${fmt(amount)}</td>
-              <td>${fmt(balAfter)}</td>
-            </tr>
-          `;
-        }).join('');
-
-        document.getElementById('txBody').innerHTML =
-          rows || '<tr><td colspan="4">Sem transações</td></tr>';
-      } catch (err) {
-        console.error(err);
-        document.getElementById('txBody').innerHTML = '<tr><td colspan="4">Erro ao carregar transações</td></tr>';
-      }
-    }
-
-    // ================== Raspadinha ==================
-    let currentPrize = 0;
-
-    // canvas raspadinha
-    const canvas = document.getElementById('scratch');
-    const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
-
-    function resizeCanvas() {
-      if (!canvas) return;
-      const rect = canvas.parentElement.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.style.width = rect.width + 'px';
-      canvas.style.height = rect.height + 'px';
-      canvas.width = Math.floor(rect.width * dpr);
-      canvas.height = Math.floor(rect.height * dpr);
-      if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      resetMask();
-    }
-
-    function resetMask() {
-      if (!ctx) return;
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#c0c0c0';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // inicializa
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    // pointer (funciona para mouse + touch)
-    let isDown = false;
-    if (canvas) {
-      canvas.addEventListener('pointerdown', e => { 
-        isDown = true; 
-        canvas.setPointerCapture(e.pointerId); 
-        scratch(e); 
-      });
-      canvas.addEventListener('pointermove', e => { if (isDown) scratch(e); });
-      canvas.addEventListener('pointerup', e => { 
-        isDown = false; 
-        try { canvas.releasePointerCapture(e.pointerId); } catch(_){} 
-      });
-      canvas.addEventListener('pointercancel', () => isDown = false);
-    }
-
-    function scratch(e) {
-      if (!ctx || !canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = (e.clientX - rect.left);
-      const y = (e.clientY - rect.top);
-      ctx.globalCompositeOperation = 'destination-out';
-      ctx.beginPath();
-      ctx.arc(x, y, 22, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
-    }
-
-    // Abrir jogo: chama /scratch/play
-    async function playScratch() {
-      if (!userId) return alert('Faça login');
-
-      const aposta = Number(document.getElementById('betAmount').value);
-      if (!aposta || aposta < 0.20 || aposta > 30) {
-        return alert('A aposta deve ser entre R$ 0,20 e R$ 30,00');
-      }
-
-      try {
-        const r = await fetch(`${API}/scratch/play`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ userId, bet: aposta })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro na raspadinha');
-
-        currentPrize = j.prize || 0;
-
-        document.getElementById('prizeText').innerText = `R$ ${Number(currentPrize).toFixed(2)}`;
-        document.getElementById('prizeLabel').innerText = '';
-        if (typeof j.finalBalance === 'number') {
-          document.getElementById('balance').innerText = fmt(j.finalBalance);
-        } else if (j.finalBalance_cents) {
-          document.getElementById('balance').innerText = fmt(j.finalBalance_cents/100);
-        }
-
-        // Revela tudo
-        if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // Atualiza histórico e carteira
-        loadTransactions();
-        wallet();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao jogar raspadinha');
-      }
-    }
-
-    function resetScratch() {
-      currentPrize = 0;
-      document.getElementById('prizeText').innerText = 'R$ 0,00';
-      document.getElementById('prizeLabel').innerText = 'Clique em “Raspar agora”';
-      resetMask();
-      loadTransactions();
-      wallet();
-    }
-  </script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Script customizado -->
+  <script src="js/app.js"></script>
 </body>
 </html>
