@@ -46,6 +46,10 @@ app.get('/wallet/:userId', (req, res) => {
   res.json({ balance: user.balance, hold: user.hold });
 });
 
+app.get('/', (req, res) => {
+  res.json({ ok: true, message: 'API está no ar 🚀' });
+});
+
 // Endpoint de depósito
 app.post('/deposit', async (req, res) => {
   const { email, amount, currency = 'BRL', buyer_document } = req.body;
