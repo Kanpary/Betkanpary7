@@ -101,7 +101,8 @@ export async function createPaymentIntent({ amount, currency = 'BRL', userRef, b
     buyer_infos: {
       buyer_name: buyer.buyer_name || buyer.name || 'Cliente',
       buyer_email: buyer.buyer_email || buyer.email || 'cliente@example.com',
-      buyer_document: buyer.buyer_document || buyer.document || '',
+      // ⚠️ BullsPay exige documento (CPF/CNPJ)
+      buyer_document: buyer.buyer_document || buyer.document || '00000000000',
       buyer_phone: buyer.buyer_phone || buyer.phone || ''
     }
   };
@@ -221,4 +222,4 @@ export async function createPayout({ amount, currency = 'BRL', userRef, destinat
     status,
     raw: data
   };
-    }
+}
