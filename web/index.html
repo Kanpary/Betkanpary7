@@ -77,6 +77,7 @@
   <div class="card">
     <h3>Depósito</h3>
     <input id="depAmount" type="number" value="10" min="6" step="0.01">
+    <input id="depDocument" type="text" placeholder="CPF ou CNPJ do comprador">
     <button class="btn-success" onclick="deposit()">Depositar</button>
     <div id="dep"></div>
   </div>
@@ -194,13 +195,20 @@
     async function deposit() {
       if (!userId) return alert('Faça login');
       const reais = Number(document.getElementById('depAmount').value);
+      const documento = document.getElementById('depDocument').value.trim();
       if (!reais || reais < 6) return alert('O valor mínimo para depósito é R$ 6,00');
+      if (!documento) return alert('Informe o CPF ou CNPJ do comprador');
 
       try {
         const r = await fetch(`${API}/deposit`, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email: userEmail, amount: reais, currency: 'BRL' })
+          body: JSON.stringify({ 
+            email: userEmail, 
+            amount: reais, 
+            currency: 'BRL',
+            buyer_document: documento 
+          })
         });
         const j = await r.json();
         if (!r.ok) return alert(j.error || 'Erro no depósito');
