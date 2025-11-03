@@ -15,11 +15,9 @@ function ensureEnv() {
 /** Obtém uma função fetch: usa globalThis.fetch quando disponível, senão tenta importar node-fetch */
 async function getFetch() {
   if (typeof fetch !== 'undefined') return fetch;
-  // tenta importar node-fetch dinamicamente
   try {
     const mod = await import('node-fetch');
     const ff = mod.default ?? mod;
-    // define global para chamadas futuras
     if (!globalThis.fetch) globalThis.fetch = ff;
     return ff;
   } catch (err) {
@@ -76,7 +74,6 @@ function extractPixInfo(data = {}) {
 function toCentsLocal(v) {
   const n = Number(v);
   if (Number.isNaN(n) || n <= 0) return 0;
-  // se inteiro e maior que 1000, assume centavos já
   if (Number.isInteger(n) && Math.abs(n) > 1000) return n;
   return Math.round(n * 100);
 }
@@ -224,4 +221,4 @@ export async function createPayout({ amount, currency = 'BRL', userRef, destinat
     status,
     raw: data
   };
-}
+      }
