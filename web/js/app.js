@@ -19,38 +19,72 @@ function showAlert(message, type = 'success') {
   setTimeout(() => alert.remove(), 4000);
 }
 
-// Login
-document.getElementById('loginForm').addEventListener('submit', async (e) => {
+/* ===========================
+   CADASTRO
+=========================== */
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const email = document.getElementById('email').value.trim();
+  const username = document.getElementById('username').value.trim();
+  const email = document.getElementById('registerEmail').value.trim();
+  const password = document.getElementById('registerPassword').value.trim();
+  const cpf = document.getElementById('cpf').value.trim();
 
-  if (!email.includes('@')) {
-    showAlert('Digite um e-mail válido', 'danger');
+  if (!/^\d{11}$/.test(cpf)) {
+    showAlert('CPF inválido. Digite apenas números (11 dígitos).', 'danger');
     return;
   }
 
   try {
-    const res = await fetch(`${API_URL}/login`, {
+    const res = await fetch(`${API_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ username, email, password, cpf })
     });
     const data = await res.json();
     if (data.userId) {
-      currentUser = data;
-      document.getElementById('dashboard').classList.remove('d-none');
-      showAlert(`Bem-vindo, ${data.email}!`, 'success');
-      loadWallet();
-      loadTransactions();
+      showAlert('Cadastro realizado com sucesso! Agora faça login.', 'success');
+      // Troca para aba de login
+      document.querySelector('#login-tab').click();
     } else {
-      showAlert('Erro no login', 'danger');
+      showAlert(data.error || 'Erro no cadastro', 'danger');
     }
   } catch (err) {
     showAlert('Falha na conexão com o servidor', 'danger');
   }
 });
 
-// Atualizar carteira
+/* ===========================
+   LOGIN
+=========================== */
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const password = document.getElementById('loginPassword').value.trim();
+
+  try {
+    const res = await fetch(`${API_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.userId) {
+      currentUser = data;
+      document.getElementById('dashboard').classList.remove('d-none');
+      showAlert(`Bem-vindo, ${data.username || data.email}!`, 'success');
+      loadWallet();
+      loadTransactions();
+    } else {
+      showAlert(data.error || 'Credenciais inválidas', 'danger');
+    }
+  } catch (err) {
+    showAlert('Falha na conexão com o servidor', 'danger');
+  }
+});
+
+/* ===========================
+   CARTEIRA
+=========================== */
 async function loadWallet() {
   if (!currentUser) return;
   const res = await fetch(`${API_URL}/wallet/${currentUser.userId}`);
@@ -59,7 +93,9 @@ async function loadWallet() {
   document.getElementById('hold').textContent = formatCurrency(data.hold);
 }
 
-// Depósito
+/* ===========================
+   DEPÓSITO
+=========================== */
 document.getElementById('depositForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!currentUser) return;
@@ -71,8 +107,8 @@ document.getElementById('depositForm').addEventListener('submit', async (e) => {
     showAlert('Digite um valor válido para depósito', 'danger');
     return;
   }
-  if (buyer_document.length < 11) {
-    showAlert('Digite um CPF ou CNPJ válido', 'danger');
+  if (!/^\d{11}$/.test(buyer_document)) {
+    showAlert('Digite um CPF válido (11 dígitos)', 'danger');
     return;
   }
 
@@ -99,7 +135,9 @@ document.getElementById('depositForm').addEventListener('submit', async (e) => {
   }
 });
 
-// Saque
+/* ===========================
+   SAQUE
+=========================== */
 document.getElementById('payoutForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!currentUser) return;
@@ -139,7 +177,9 @@ document.getElementById('payoutForm').addEventListener('submit', async (e) => {
   }
 });
 
-// Atualizar gráfico de transações
+/* ===========================
+   HISTÓRICO + GRÁFICO
+=========================== */
 function updateChart(transactions) {
   const ctx = document.getElementById('transactionsChart').getContext('2d');
 
@@ -185,7 +225,6 @@ function updateChart(transactions) {
   });
 }
 
-// Histórico
 async function loadTransactions() {
   if (!currentUser) return;
   const res = await fetch(`${API_URL}/transactions/${currentUser.userId}?limit=10`);
@@ -195,7 +234,7 @@ async function loadTransactions() {
 
   data.items.forEach(tx => {
     const li = document.createElement('li');
-    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+    li.className = 'list-group-item bg-dark text-light border-secondary d-flex justify-content-between align-items-center';
     li.innerHTML = `
       <span>${tx.type === 'deposit' ? '💰 Depósito' : '💸 Saque'} - ${formatCurrency(tx.amount)}</span>
       <span class="badge bg-${tx.status === 'succeeded' ? 'success' : tx.status === 'pending' ? 'warning' : 'secondary'}">
@@ -205,6 +244,6 @@ async function loadTransactions() {
     list.appendChild(li);
   });
 
-  // Atualizar gráfico com os dados em ordem cronológica
+  // Atualizar gráfico em ordem cronológica
   updateChart(data.items.reverse());
         }
