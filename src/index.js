@@ -118,8 +118,9 @@ app.post('/deposit', async (req, res) => {
       [userId, toCents(amount), currency || 'BRL', 'deposit', paymentData.status, JSON.stringify(paymentData)]
     );
 
-    const qrCodeUrl = paymentData.pixQrCode || null;
-    const qrCodeBase64 = paymentData.qr_code_base64 || null;
+    // Normalização dos campos de QR Code
+    const qrCodeUrl = paymentData.pixQrCode ?? null;
+    const qrCodeBase64 = paymentData.qr_code_base64 ?? null;
     const copiaCola = paymentData.pixCopiaCola || paymentData.qr_code_text || paymentData.pixCopiaECola || null;
 
     res.json({
@@ -144,28 +145,32 @@ app.post('/payout', async (req, res) => {
     }
 
     const userId = await getOrCreateUser(email);
-
     const cents = toCents(amount);
+
     const w = await pool.query('SELECT balance FROM wallets WHERE user_id=$1', [userId]);
     if (!w.rows.length) return res.status(404).json({ error: 'Carteira não encontrada' });
     if (Number(w.rows[0].balance) < cents) {
       return res.status(400).json({ error: 'Saldo insuficiente' });
     }
 
-    await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
-
+    // Primeiro cria o payout
     const payoutData = await createPayout({
-      amount: toCents(amount),
+      amount: cents,
       currency: currency || 'BRL',
       userRef: userId,
       destination
     });
 
-    await pool.query(
-      `INSERT INTO payments (user_id, amount, currency, type, status, raw)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [userId, cents, currency || 'BRL', 'payout', payoutData.status, JSON.stringify(payoutData)]
-    );
+    // Só debita se a criação do payout foi bem-sucedida
+    if (payoutData && payoutData.status) {
+      await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
+
+      await pool.query(
+        `INSERT INTO payments (user_id, amount, currency, type, status, raw)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [userId, cents, currency || 'BRL', 'payout', payoutData.status, JSON.stringify(payoutData)]
+      );
+    }
 
     res.json(payoutData);
   } catch (err) {
@@ -216,7 +221,6 @@ app.post('/scratch/play', async (req, res) => {
 
 // ===================== Jogo: Raspadinha =====================
 
-// Jogar raspadinha
 app.post('/scratch/play', async (req, res) => {
   try {
     const { userId, bet } = req.body;
@@ -225,7 +229,9 @@ app.post('/scratch/play', async (req, res) => {
     }
 
     const cents = toCents(bet);
-    if (cents <= 0) return res.status(400).json({ error: 'Valor de aposta inválido' });
+    if (cents < toCents(0.20) || cents > toCents(30)) {
+      return res.status(400).json({ error: 'A aposta deve ser entre R$ 0,20 e R$ 30,00' });
+    }
 
     const w = await pool.query('SELECT balance FROM wallets WHERE user_id=$1', [userId]);
     if (!w.rows.length) return res.status(404).json({ error: 'Carteira não encontrada' });
@@ -236,9 +242,10 @@ app.post('/scratch/play', async (req, res) => {
     // Debita aposta
     await pool.query('UPDATE wallets SET balance = balance - $1 WHERE user_id = $2', [cents, userId]);
 
-    // Sorteio simples de prêmios em centavos
-    const poolPrizes = [0,0,0,0,100,200,500,1000,2000,5000];
-    const prize = poolPrizes[Math.floor(Math.random() * poolPrizes.length)];
+    // Multiplicadores possíveis
+    const multipliers = [0, 0.5, 1, 2, 5, 10, 20];
+    const mult = multipliers[Math.floor(Math.random() * multipliers.length)];
+    const prize = Math.round(cents * mult);
 
     // Credita prêmio se houver
     if (prize > 0) {
