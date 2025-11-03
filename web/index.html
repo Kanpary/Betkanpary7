@@ -251,15 +251,27 @@ async function withdraw() {
 <script>
 let currentPrize = 0;
 
-// Inicia raspadinha
+<script>
+// Função da raspadinha
 function playScratch() {
   if (!userId) return alert('Faça login');
-  // Simulação local de prêmios (pode ser substituído por chamada ao backend)
-  const pool = [0,0,0,0,1,2,5,10,20,50];
-  currentPrize = pool[Math.floor(Math.random() * pool.length)];
-  document.getElementById('prizeText').innerText = `R$ ${currentPrize.toFixed(2)}`;
-  document.getElementById('prizeLabel').innerText = 'Raspe para revelar';
-  resetScratch();
+
+  const aposta = Number(document.getElementById('depAmount').value);
+  if (aposta < 0.20 || aposta > 30) {
+    return alert('A aposta deve ser entre R$ 0,20 e R$ 30,00');
+  }
+
+  // Multiplicadores possíveis
+  const pool = [0, 0.5, 1, 2, 5, 10, 20];
+  const mult = pool[Math.floor(Math.random() * pool.length)];
+  const premio = aposta * mult;
+
+  // Atualiza interface com o valor real
+  document.getElementById('prizeText').innerText = `R$ ${premio.toFixed(2)}`;
+  document.getElementById('prizeLabel').innerText = '';
+
+  // Revela tudo de uma vez
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 // Resetar raspadinha
@@ -270,7 +282,6 @@ function resetScratch() {
   resetMask();
 }
 
-<script>
 // Canvas raspadinha
 const canvas = document.getElementById('scratch');
 const ctx = canvas.getContext('2d');
@@ -305,7 +316,8 @@ function scratch(e) {
   ctx.fill();
   ctx.globalCompositeOperation = 'source-over';
 }
-
+</script>
+  
 // Histórico de transações
 async function loadTransactions() {
   if (!userId) return alert('Faça login');
