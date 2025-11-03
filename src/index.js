@@ -21,12 +21,12 @@ const __dirname = path.dirname(__filename);
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Servir arquivos estáticos da pasta "web"
-app.use(express.static(path.join(__dirname, 'web')));
+// ✅ Servir arquivos estáticos da pasta "web" (que está na raiz do projeto)
+app.use(express.static(path.join(__dirname, '..', 'web')));
 
 // ✅ Rota raiz entrega o index.html da pasta "web"
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'web', 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));
 });
 
 // In-memory "database" simples para testes
