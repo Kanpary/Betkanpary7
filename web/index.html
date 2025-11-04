@@ -125,9 +125,10 @@
     <h3>Perfil</h3>
     <div id="profileInfo"></div>
     <div class="actions">
-      <button class="btn-success" onclick="showDeposit()">Depositar</button>
-      <button class="btn-danger" onclick="showWithdraw()">Sacar</button>
+      <button class="btn-success" onclick="showPanel('depositPanel')">Depositar</button>
+      <button class="btn-danger" onclick="showPanel('withdrawPanel')">Sacar</button>
       <button class="btn" onclick="loadTransactions()">Histórico</button>
+      <button class="btn-primary" onclick="showPanel('scratchPanel')">Raspadinha</button>
     </div>
   </div>
 
@@ -138,6 +139,7 @@
     <input id="depDocument" type="text" placeholder="CPF ou CNPJ do comprador">
     <button class="btn-success" onclick="deposit()">Depositar</button>
     <div id="dep"></div>
+    <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
   </div>
 
   <!-- Painel de saque -->
@@ -154,6 +156,7 @@
     <input id="pixKey" placeholder="Informe a chave Pix">
     <button class="btn-danger" onclick="withdraw()">Sacar</button>
     <div id="saq"></div>
+    <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
   </div>
 
   <!-- Histórico -->
@@ -167,6 +170,7 @@
         <tr><td colspan="4">Sem transações</td></tr>
       </tbody>
     </table>
+    <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
   </div>
 
   <!-- Raspadinha -->
@@ -189,8 +193,10 @@
       <button class="btn-primary" onclick="playScratch()">Raspar agora</button>
       <button class="btn" onclick="resetScratch()">Raspar de novo</button>
     </div>
+    <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
   </div>
 
+  <!-- Scripts -->
   <script>
     const API = 'https://kanparycasino.onrender.com';
     let userId = null;
@@ -358,7 +364,7 @@
     async function loadTransactions() {
       if (!userId) return;
       try {
-        const r = await fetch(`${API}/transactions/${userId}?limit=10`);
+        const r = await fetch(`${API}/transactions/${userId}`);
         const j = await r.json();
         if (!r.ok) return alert(j.error || 'Erro ao buscar histórico');
 
