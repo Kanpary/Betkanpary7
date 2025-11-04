@@ -44,7 +44,10 @@ app.post('/register', async (req, res) => {
   }
 
   try {
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1 OR cpf = $2', [email, cpf]);
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE email = $1 OR cpf = $2',
+      [email, cpf]
+    );
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Email ou CPF já cadastrado' });
     }
@@ -64,10 +67,15 @@ app.post('/register', async (req, res) => {
 // Login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email e senha obrigatórios' });
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email e senha obrigatórios' });
+  }
 
   try {
-    const result = await pool.query('SELECT id, password FROM users WHERE email = $1', [email]);
+    const result = await pool.query(
+      'SELECT id, password FROM users WHERE email = $1',
+      [email]
+    );
     if (result.rows.length === 0 || result.rows[0].password !== password) {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
@@ -83,7 +91,10 @@ app.post('/login', async (req, res) => {
 app.get('/wallet/:userId', async (req, res) => {
   const userId = req.params.userId;
   try {
-    const result = await pool.query('SELECT balance, hold FROM users WHERE id = $1', [userId]);
+    const result = await pool.query(
+      'SELECT balance, hold FROM users WHERE id = $1',
+      [userId]
+    );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
@@ -98,7 +109,7 @@ app.get('/wallet/:userId', async (req, res) => {
   }
 });
 
-// Depósito (corrigido, sem buyer_document)
+// Depósito
 app.post('/deposit', async (req, res) => {
   const { userId, amount, currency = 'BRL' } = req.body;
   if (!userId || !amount) {
@@ -122,7 +133,7 @@ app.post('/deposit', async (req, res) => {
 
     await pool.query(
       'INSERT INTO transactions (user_id, type, amount, status, balance_after) VALUES ($1, $2, $3, $4, $5)',
-      [user.id, 'deposit', amount, intent.status, user.balance]
+      [user.id, 'deposit', Number(amount), intent.status, Number(user.balance)]
     );
 
     res.json(intent);
@@ -151,9 +162,9 @@ app.post('/payout', async (req, res) => {
       return res.status(400).json({ error: 'Saldo insuficiente' });
     }
 
-    const taxa = amount * 0.03;
-    const valorLiquido = amount - taxa;
-    const novoSaldo = user.balance - amount;
+    const taxa = Number(amount) * 0.03;
+    const valorLiquido = Number(amount) - taxa;
+    const novoSaldo = Number(user.balance) - Number(amount);
 
     const payout = await createPayout({
       amount: valorLiquido,
@@ -166,7 +177,7 @@ app.post('/payout', async (req, res) => {
 
     await pool.query(
       'INSERT INTO transactions (user_id, type, amount, status, balance_after) VALUES ($1, $2, $3, $4, $5)',
-      [user.id, 'withdraw', -amount, payout.status, novoSaldo]
+      [user.id, 'withdraw', -Number(amount), payout.status, novoSaldo]
     );
 
     res.json({
@@ -213,7 +224,7 @@ app.post('/scratch/play', async (req, res) => {
     const rtp = 0.92;
     const chance = Math.random();
 
-    let novoSaldo = user.balance - bet;
+    let novoSaldo = Number(user.balance) - Number(bet);
     if (chance < rtp) {
       const multiplier = 0.2 + Math.random() * 1.8;
       prize = Number((bet * multiplier).toFixed(2));
@@ -224,7 +235,7 @@ app.post('/scratch/play', async (req, res) => {
 
     await pool.query(
       'INSERT INTO transactions (user_id, type, amount, status, balance_after) VALUES ($1, $2, $3, $4, $5)',
-      [user.id, 'scratch', prize - bet, 'finished', novoSaldo]
+      [user.id, 'scratch', prize - Number(bet), 'finished', novoSaldo]
     );
 
     res.json({ prize, finalBalance: novoSaldo });
