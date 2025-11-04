@@ -76,7 +76,7 @@ function toCentsLocal(v) {
   if (Number.isNaN(n) || n <= 0) return 0;
   if (Number.isInteger(n) && Math.abs(n) > 1000) return n;
   return Math.round(n * 100);
-}
+    }
 
 /**
  * Cria um payment intent (PIX) na BullsPay
@@ -101,7 +101,6 @@ export async function createPaymentIntent({ amount, currency = 'BRL', userRef, b
     buyer_infos: {
       buyer_name: buyer.buyer_name || buyer.name || 'Cliente',
       buyer_email: buyer.buyer_email || buyer.email || 'cliente@example.com',
-      // ⚠️ BullsPay exige documento (CPF/CNPJ)
       buyer_document: buyer.buyer_document || buyer.document || '00000000000',
       buyer_phone: buyer.buyer_phone || buyer.phone || ''
     }
@@ -222,4 +221,93 @@ export async function createPayout({ amount, currency = 'BRL', userRef, destinat
     status,
     raw: data
   };
+    }
+
+/**
+ * Lista transações BullsPay com filtros
+ * @param {{status?:string, page?:number, limit?:number, id?:string}} opts
+ */
+export async function listTransactions({ status = 'all', page = 1, limit = 10, id = '' } = {}) {
+  ensureEnv();
+  const fetchFn = await getFetch();
+
+  const params = new URLSearchParams({ status, page, limit });
+  if (id) params.append('id', id);
+
+  const resp = await fetchFn(`https://api-gateway.bullspay.com.br/api/transactions/list?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'X-Public-Key': process.env.BULLSPAY_CLIENT_ID,
+      'X-Private-Key': process.env.BULLSPAY_API_KEY
+    }
+  });
+
+  if (!resp.ok) throw new Error(`Erro ao listar transações: ${resp.status}`);
+  return await resp.json();
 }
+
+/**
+ * Reembolsa uma transação BullsPay
+ * @param {string} unicId
+ */
+export async function refundTransaction(unicId) {
+  ensureEnv();
+  const fetchFn = await getFetch();
+
+  const resp = await fetchFn(`https://api-gateway.bullspay.com.br/api/transactions/refund/${unicId}`, {
+    method: 'PUT',
+    headers: {
+      'Accept': 'application/json',
+      'X-Public-Key': process.env.BULLSPAY_CLIENT_ID,
+      'X-Private-Key': process.env.BULLSPAY_API_KEY
+    }
+  });
+
+  if (!resp.ok) throw new Error(`Erro ao reembolsar: ${resp.status}`);
+  return await resp.json();
+}
+
+/**
+ * Consulta saldo BullsPay
+ */
+export async function getBullsPayBalance() {
+  ensureEnv();
+  const fetchFn = await getFetch();
+
+  const resp = await fetchFn('https://api-gateway.bullspay.com.br/api/withdrawals/balance', {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'X-Public-Key': process.env.BULLSPAY_CLIENT_ID,
+      'X-Private-Key': process.env.BULLSPAY_API_KEY
+    }
+  });
+
+  if (!resp.ok) throw new Error(`Erro ao consultar saldo: ${resp.status}`);
+  return await resp.json();
+}
+
+/**
+ * Lista saques BullsPay com filtros
+ * @param {{status?:string, page?:number, limit?:number, id?:string}} opts
+ */
+export async function listWithdrawals({ status = 'all', page = 1, limit = 10, id = '' } = {}) {
+  ensureEnv();
+  const fetchFn = await getFetch();
+
+  const params = new URLSearchParams({ status, page, limit });
+  if (id) params.append('id', id);
+
+  const resp = await fetchFn(`https://api-gateway.bullspay.com.br/api/withdrawals/list?${params.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json',
+      'X-Public-Key': process.env.BULLSPAY_CLIENT_ID,
+      'X-Private-Key': process.env.BULLSPAY_API_KEY
+    }
+  });
+
+  if (!resp.ok) throw new Error(`Erro ao listar saques: ${resp.status}`);
+  return await resp.json();
+    }
