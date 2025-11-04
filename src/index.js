@@ -29,7 +29,7 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));
 });
 
-// "Banco" em memória para testes
+// "Banco" em memória (para testes)
 const users = {}; // { userId: { email, balance, hold, transactions: [] } }
 
 // Função utilitária
@@ -96,12 +96,18 @@ app.post('/deposit', async (req, res) => {
 // Saque (com limite de R$500 e taxa de 3%)
 app.post('/payout', async (req, res) => {
   const { email, amount, currency = 'BRL', destination } = req.body;
-  if (!email || !amount || !destination) return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
+  if (!email || !amount || !destination) {
+    return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
+  }
 
-  if (amount > 500) return res.status(400).json({ error: 'Valor máximo de saque é R$ 500,00' });
+  if (amount > 500) {
+    return res.status(400).json({ error: 'Valor máximo de saque é R$ 500,00' });
+  }
 
   const user = getOrCreateUser(email);
-  if (user.balance < amount) return res.status(400).json({ error: 'Saldo insuficiente' });
+  if (user.balance < amount) {
+    return res.status(400).json({ error: 'Saldo insuficiente' });
+  }
 
   // aplica taxa de 3%
   const taxa = amount * 0.03;
@@ -162,7 +168,6 @@ app.post('/scratch/play', (req, res) => {
   const chance = Math.random();
   let prize = 0;
 
-  // lógica simples: 92% das vezes retorna algo proporcional
   if (chance < rtp) {
     // prêmio aleatório entre 0.2x e 2x a aposta
     const multiplier = 0.2 + Math.random() * 1.8;
