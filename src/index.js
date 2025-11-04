@@ -5,7 +5,14 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Pool } from 'pg';
-import { createPaymentIntent, createPayout } from './bullspay.js';
+import {
+  createPaymentIntent,
+  createPayout,
+  listTransactions,
+  refundTransaction,
+  getBullsPayBalance,
+  listWithdrawals
+} from './bullspay.js';
 
 dotenv.config();
 
@@ -177,7 +184,7 @@ app.post('/payout', async (req, res) => {
   }
 });
 
-// Histórico
+// Histórico local
 app.get('/transactions/:userId', async (req, res) => {
   const userId = req.params.userId;
   try {
@@ -234,6 +241,46 @@ app.post('/scratch/play', async (req, res) => {
 app.post('/webhook/bullspay', (req, res) => {
   console.log('Webhook BullsPay recebido:', JSON.stringify(req.body, null, 2));
   res.json({ ok: true });
+});
+
+// BullsPay: listar transações
+app.get('/bullspay/transactions', async (req, res) => {
+  try {
+    const data = await listTransactions(req.query);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar transações', details: err.message });
+  }
+});
+
+// BullsPay: reembolsar transação
+app.put('/bullspay/refund/:unicId', async (req, res) => {
+  try {
+    const data = await refundTransaction(req.params.unicId);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao reembolsar', details: err.message });
+  }
+});
+
+// BullsPay: consultar saldo
+app.get('/bullspay/balance', async (req, res) => {
+  try {
+    const data = await getBullsPayBalance();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao consultar saldo', details: err.message });
+  }
+});
+
+// BullsPay: listar saques
+app.get('/bullspay/withdrawals', async (req, res) => {
+  try {
+    const data = await listWithdrawals(req.query);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar saques', details: err.message });
+  }
 });
 
 // Inicia servidor
