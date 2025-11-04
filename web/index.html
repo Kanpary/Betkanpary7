@@ -84,7 +84,7 @@
 
   <div class="card">
     <h3>Saque</h3>
-    <input id="saqAmount" type="number" value="20" min="10" step="0.01">
+    <input id="saqAmount" type="number" value="20" min="10" max="500" step="0.01">
     <select id="pixType">
       <option value="cpf">CPF</option>
       <option value="cnpj">CNPJ</option>
@@ -145,126 +145,21 @@
     const fmt = v => (typeof v === 'number')
       ? v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
       : v;
-
-    // login
-    async function login() {
-      const email = document.getElementById('email').value.trim();
-      if (!email) return alert('Informe seu e-mail');
-
-      try {
-        const r = await fetch(`${API}/login`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no login');
-
-        userId = j.userId;
-        userEmail = j.email;
-        document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
-        wallet();
-        loadTransactions();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao efetuar login');
-      }
-    }
-
-    // wallet
-    async function wallet() {
-      if (!userId) return alert('Faça login');
-      try {
-        const r = await fetch(`${API}/wallet/${userId}`);
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
-
-        const balance = j.balance || 0;
-        const hold = j.hold || 0;
-
-        document.getElementById('wallet').innerText =
-          `Saldo: ${fmt(balance)} | Em processamento: ${fmt(hold)}`;
-        document.getElementById('balance').innerText = fmt(balance);
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao buscar carteira');
-      }
-    }
-
-    // deposit
-    async function deposit() {
-      if (!userId) return alert('Faça login');
-      const reais = Number(document.getElementById('depAmount').value);
-      const documento = document.getElementById('depDocument').value.trim();
-      if (!reais || reais < 6) return alert('O valor mínimo para depósito é R$ 6,00');
-      if (!documento) return alert('Informe o CPF ou CNPJ do comprador');
-
-      try {
-        const r = await fetch(`${API}/deposit`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ 
-            email: userEmail, 
-            amount: reais, 
-            currency: 'BRL',
-            buyer_document: documento 
-          })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no depósito');
-
-        let html = `<p><b>Status:</b> ${j.status || 'pending'}</p>`;
-
-        if (j.pixQrCode) {
-          html += `<p><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px"></p>`;
-        }
-        if (j.qr_code_base64) {
-          html += `<p><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px"></p>`;
-        }
-        if (j.pixCopiaCola) {
-          html += `
-            <p><b>Copia e Cola:</b></p>
-            <textarea id="copiaCola" readonly style="width:100%;height:80px">${j.pixCopiaCola}</textarea>
-            <button onclick="copyCopiaCola()">Copiar código</button>
-          `;
-        }
-        if (j.checkoutUrl) {
-          html += `<p><a href="${j.checkoutUrl}" target="_blank" rel="noopener noreferrer">Abrir checkout</a></p>`;
-        }
-
-        document.getElementById('dep').innerHTML = html;
-
-        // Atualiza carteira e histórico
-        wallet();
-        loadTransactions();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao criar depósito');
-      }
-    }
-
-    async function copyCopiaCola() {
-      const textarea = document.getElementById('copiaCola');
-      if (!textarea) return;
-      try {
-        await navigator.clipboard.writeText(textarea.value);
-        alert('Código Pix copiado!');
-      } catch (err) {
-        textarea.select();
-        document.execCommand && document.execCommand('copy');
-        alert('Código Pix copiado (fallback)!');
-      }
-    }
-
-    // withdraw
+      
+      // withdraw (com limite de R$500 e taxa de 3%)
     async function withdraw() {
       if (!userId) return alert('Faça login');
-      const reais = Number(document.getElementById('saqAmount').value);
+      let reais = Number(document.getElementById('saqAmount').value);
       const pixType = document.getElementById('pixType').value;
       const pixKey = document.getElementById('pixKey').value.trim();
 
       if (!reais || reais < 10) return alert('O valor mínimo para saque é R$ 10,00');
+      if (reais > 500) return alert('O valor máximo para saque é R$ 500,00');
       if (!pixKey) return alert('Informe a chave Pix');
+
+      // aplica taxa de 3%
+      const taxa = reais * 0.03;
+      const valorLiquido = reais - taxa;
 
       try {
         const r = await fetch(`${API}/payout`, {
@@ -272,16 +167,15 @@
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
             email: userEmail,
-            amount: reais,
+            amount: valorLiquido,
             currency: 'BRL',
             destination: { type: pixType, key: pixKey }
           })
         });
         const j = await r.json();
         if (!r.ok) return alert(j.error || 'Erro no saque');
-        document.getElementById('saq').innerText = `Payout: ${j.gateway_id || ''} (${j.status})`;
-
-        // Atualiza carteira e histórico
+        document.getElementById('saq').innerText = 
+          `Solicitado: ${fmt(reais)} | Taxa: ${fmt(taxa)} | Líquido: ${fmt(valorLiquido)} → Status: ${j.status}`;
         wallet();
         loadTransactions();
       } catch (err) {
@@ -290,7 +184,7 @@
       }
     }
 
-    // transactions
+    // histórico
     async function loadTransactions() {
       if (!userId) return;
       try {
@@ -323,9 +217,8 @@
     }
 
     // ================== Raspadinha ==================
+    // RTP configurado no backend para 92%
     let currentPrize = 0;
-
-    // canvas raspadinha
     const canvas = document.getElementById('scratch');
     const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
 
@@ -348,11 +241,9 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    // inicializa
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // pointer (funciona para mouse + touch)
     let isDown = false;
     if (canvas) {
       canvas.addEventListener('pointerdown', e => { 
@@ -367,7 +258,7 @@
       });
       canvas.addEventListener('pointercancel', () => isDown = false);
     }
-
+    
     function scratch(e) {
       if (!ctx || !canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -380,7 +271,7 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    // Abrir jogo: chama /scratch/play
+    // Jogar raspadinha (RTP definido no backend em 92%)
     async function playScratch() {
       if (!userId) return alert('Faça login');
 
