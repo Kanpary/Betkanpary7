@@ -144,7 +144,18 @@ app.post('/deposit', async (req, res) => {
       ]
     );
 
-    res.json(intent);
+    // Retorna apenas os dados úteis para o front
+    res.json({
+      status: intent.status,
+      gateway_id: intent.gateway_id || intent.raw?.data?.gateway_id,
+      transaction_id: intent.raw?.data?.transaction_id,
+      amount: intent.raw?.data?.amount || amount,
+      pix: {
+        qrcode: intent.pix?.qrcode || intent.raw?.data?.pix_url,
+        qr_code_base64: intent.pix?.qr_code_base64
+      },
+      message: intent.raw?.message || 'Transação criada'
+    });
   } catch (err) {
     console.error('Erro ao criar depósito:', err);
     res.status(500).json({ error: 'Falha ao criar depósito', details: err.message });
