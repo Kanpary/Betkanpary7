@@ -6,17 +6,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     :root {
-      --bg:#0b0f1a; --card:#121725; --panel:#111626cc; --accent:#7c4dff;
-      --accent2:#21c17a; --text:#e6e6e6; --muted:#a9b0bd; --danger:#e74c3c;
-      --glass:rgba(255,255,255,0.06); --border:#2a2f3a;
+      --bg:#0b0f1a; 
+      --card:#121725; 
+      --panel:#111626cc; 
+      --accent:#7c4dff;
+      --accent2:#21c17a; 
+      --text:#e6e6e6; 
+      --muted:#a9b0bd; 
+      --danger:#e74c3c;
+      --glass:rgba(255,255,255,0.06); 
+      --border:#2a2f3a;
     }
-    * { box-sizing: border-box }
-    html, body { height: 100% }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+
     body {
       margin: 20px;
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background: #0f1218; color: var(--text);
+      background: #0f1218; 
+      color: var(--text);
     }
+
     .card {
       background: #181c25;
       border: 1px solid var(--border);
@@ -24,6 +35,7 @@
       border-radius: 8px;
       margin-bottom: 12px;
     }
+
     input, textarea, select {
       width: 100%;
       margin-bottom: 6px;
@@ -33,6 +45,7 @@
       background: #0f1218;
       color: var(--text);
     }
+
     button {
       margin-top: 6px;
       padding: 6px 12px;
@@ -40,27 +53,33 @@
       border-radius: 4px;
       cursor: pointer;
     }
-    button:hover { opacity: 0.9 }
-    .btn-primary { background: #2d6cdf; color: #fff }
-    .btn-success { background: #21c17a; color: #fff }
-    .btn-danger { background: var(--danger); color: #fff }
+
+    button:hover { opacity: 0.9; }
+    .btn-primary { background: #2d6cdf; color: #fff; }
+    .btn-success { background: #21c17a; color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
     }
+
     th, td {
       border: 1px solid var(--border);
       padding: 6px;
       text-align: center;
     }
-    th { background: #222 }
+
+    th { background: #222; }
+
     .brand {
       display: flex;
       align-items: center;
       gap: 10px;
       margin-bottom: 12px;
     }
+
     .logo {
       width: 32px;
       height: 32px;
@@ -68,11 +87,13 @@
       background: conic-gradient(from 220deg at 50% 50%, #7c4dff, #21c17a, #ffd76d, #7c4dff);
       box-shadow: 0 0 16px #7c4dff33;
     }
+
     .title {
       font-size: 20px;
       font-weight: 800;
       letter-spacing: .3px;
     }
+
     .tag {
       background: #ffffff10;
       padding: 6px 10px;
@@ -91,7 +112,7 @@
       flex-wrap: wrap;
       margin-top: 10px;
     }
-    .hidden { display: none }
+    .hidden { display: none; }
   </style>
 </head>
 <body>
@@ -205,7 +226,7 @@
         body: JSON.stringify({ username, email, password, cpf })
       });
       const data = await res.json();
-      regResult.innerText = JSON.stringify(data);
+      regResult.innerText = JSON.stringify(data, null, 2);
     }
 
     async function login() {
@@ -227,27 +248,27 @@
     }
 
     async function deposit() {
-  const amount = depAmount.value;
-  const res = await fetch('/deposit', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId: currentUser.userId, amount })
-  });
-  const data = await res.json();
+      const amount = depAmount.value;
+      const res = await fetch('/deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUser.userId, amount })
+      });
+      const data = await res.json();
 
-  if (data.pix?.qrcode) {
-    dep.innerHTML = `
-      <p>Status: ${data.status}</p>
-      <p><b>Código Pix:</b></p>
-      <textarea readonly style="width:100%;height:80px">${data.pix.qrcode}</textarea>
-      ${data.pix.qr_code_base64 
-        ? `<img src="data:image/png;base64,${data.pix.qr_code_base64}" style="max-width:200px;margin-top:10px"/>` 
-        : ''}
-    `;
-  } else {
-    dep.innerText = JSON.stringify(data, null, 2);
-  }
-}
+      if (data.pix?.qrcode) {
+        dep.innerHTML = `
+          <p>Status: ${data.status}</p>
+          <p><b>Código Pix:</b></p>
+          <textarea readonly style="width:100%;height:80px">${data.pix.qrcode}</textarea>
+          ${data.pix.qr_code_base64 
+            ? `<img src="data:image/png;base64,${data.pix.qr_code_base64}" style="max-width:200px;margin-top:10px"/>` 
+            : ''}
+        `;
+      } else {
+        dep.innerText = JSON.stringify(data, null, 2);
+      }
+    }
 
     async function withdraw() {
       const amount = saqAmount.value;
@@ -266,7 +287,13 @@
       const data = await res.json();
       let html = '<table><tr><th>ID</th><th>Tipo</th><th>Valor</th><th>Status</th><th>Saldo</th></tr>';
       data.items.forEach(tx => {
-        html += `<tr><td>${tx.id}</td><td>${tx.type}</td><td>${tx.amount}</td><td>${tx.status}</td><td>${tx.balance_after}</td></tr>`;
+        html += `<tr>
+          <td>${tx.id}</td>
+          <td>${tx.type}</td>
+          <td>${tx.amount}</td>
+          <td>${tx.status}</td>
+          <td>${tx.balance_after}</td>
+        </tr>`;
       });
       html += '</table>';
       transactions.innerHTML = html;
@@ -284,7 +311,7 @@
       scratchResult.innerText = `Prêmio: ${data.prize} | Saldo final: ${data.finalBalance}`;
     }
 
-    // BullsPay integrações reais
+    // ==================== BullsPay integrações ====================
     async function loadBullsTransactions() {
       const res = await fetch('/bullspay/transactions');
       const data = await res.json();
@@ -307,4 +334,4 @@
     }
   </script>
 </body>
-  </html>
+</html>
