@@ -125,10 +125,12 @@ app.post('/deposit', async (req, res) => {
   try {
     const userRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
     const user = userRes.rows[0];
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
 
     const intent = await createPaymentIntent({
-      amount,
+      amount: Number(amount),
       currency,
       userRef: user.id,
       buyer: {
@@ -139,7 +141,9 @@ app.post('/deposit', async (req, res) => {
 
     // Salva transação com external_id retornado pela BullsPay
     await pool.query(
-      'INSERT INTO transactions (user_id, type, amount, status, balance_after, external_id) VALUES ($1, $2, $3, $4, $5, $6)',
+      `INSERT INTO transactions 
+        (user_id, type, amount, status, balance_after, external_id) 
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         user.id,
         'deposit',
@@ -152,15 +156,20 @@ app.post('/deposit', async (req, res) => {
 
     // Retorna apenas os dados úteis para o front
     res.json({
-      status: intent.status,
-      gateway_id: intent.gateway_id || intent.raw?.data?.gateway_id,
-      transaction_id: intent.raw?.data?.transaction_id,
-      amount: intent.raw?.data?.amount || amount,
+      status: intent.status || 'pending',
+      gateway_id: intent.gateway_id || intent.raw?.data?.gateway_id || null,
+      transaction_id: intent.raw?.data?.transaction_id || null,
+      amount: intent.raw?.data?.amount || Number(amount),
       pix: {
-        qrcode: intent.pix?.qrcode || intent.raw?.data?.qrcode || intent.raw?.data?.pix_url,
-        qr_code_base64: intent.pix?.qr_code_base64 || intent.raw?.data?.qr_code_base64
+        qrcode: intent.pix?.qrcode 
+                || intent.raw?.data?.qrcode 
+                || intent.raw?.data?.pix_url 
+                || null,
+        qr_code_base64: intent.pix?.qr_code_base64 
+                        || intent.raw?.data?.qr_code_base64 
+                        || null
       },
-      message: intent.raw?.message || 'Transação criada'
+      message: intent.raw?.message || 'Transação criada com sucesso'
     });
   } catch (err) {
     console.error('Erro ao criar depósito:', err);
@@ -171,25 +180,29 @@ app.post('/deposit', async (req, res) => {
 // ==================== Saque ====================
 app.post('/payout', async (req, res) => {
   const { userId, amount, currency = 'BRL', destination } = req.body;
-  if (!userId || !amount || !destination) {
+  const valorSolicitado = Number(amount);
+
+  if (!userId || !valorSolicitado || !destination) {
     return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
   }
 
-  if (amount > 500) {
+  if (valorSolicitado > 500) {
     return res.status(400).json({ error: 'Valor máximo de saque é R$ 500,00' });
   }
 
   try {
     const userRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
     const user = userRes.rows[0];
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
-    if (user.balance < amount) {
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    if (Number(user.balance) < valorSolicitado) {
       return res.status(400).json({ error: 'Saldo insuficiente' });
     }
 
-    const taxa = Number(amount) * 0.03;
-    const valorLiquido = Number(amount) - taxa;
-    const novoSaldo = Number(user.balance) - Number(amount);
+    const taxa = valorSolicitado * 0.03;
+    const valorLiquido = valorSolicitado - taxa;
+    const novoSaldo = Number(user.balance) - valorSolicitado;
 
     const payout = await createPayout({
       amount: valorLiquido,
@@ -198,18 +211,23 @@ app.post('/payout', async (req, res) => {
       destination
     });
 
+    // Atualiza saldo do usuário
     await pool.query('UPDATE users SET balance = $1 WHERE id = $2', [novoSaldo, user.id]);
 
+    // Registra transação
     await pool.query(
       'INSERT INTO transactions (user_id, type, amount, status, balance_after) VALUES ($1, $2, $3, $4, $5)',
-      [user.id, 'withdraw', -Number(amount), payout.status, novoSaldo]
+      [user.id, 'withdraw', -valorSolicitado, payout.status || 'pending', novoSaldo]
     );
 
+    // Retorno consistente para o front
     res.json({
-      ...payout,
-      solicitado: amount,
+      status: payout.status || 'pending',
+      solicitado: valorSolicitado,
       taxa,
-      liquido: valorLiquido
+      liquido: valorLiquido,
+      novoSaldo,
+      detalhes: payout
     });
   } catch (err) {
     console.error('Erro ao solicitar saque:', err);
@@ -235,38 +253,53 @@ app.get('/transactions/:userId', async (req, res) => {
 // ==================== Raspadinha ====================
 app.post('/scratch/play', async (req, res) => {
   const { userId, bet } = req.body;
-  if (!userId || !bet || bet <= 0) {
+  const aposta = Number(bet);
+
+  if (!userId || !aposta || aposta <= 0) {
     return res.status(400).json({ error: 'Dados inválidos' });
   }
 
   try {
     const userRes = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
     const user = userRes.rows[0];
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
-    if (user.balance < bet) return res.status(400).json({ error: 'Saldo insuficiente' });
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    if (Number(user.balance) < aposta) {
+      return res.status(400).json({ error: 'Saldo insuficiente' });
+    }
 
     let prize = 0;
-    const rtp = 0.92;
+    const rtp = 0.92; // retorno teórico
     const chance = Math.random();
 
-    let novoSaldo = Number(user.balance) - Number(bet);
+    // desconta a aposta
+    let novoSaldo = Number(user.balance) - aposta;
+
+    // calcula prêmio se ganhar
     if (chance < rtp) {
-      const multiplier = 0.2 + Math.random() * 1.8;
-      prize = Number((bet * multiplier).toFixed(2));
+      const multiplier = 0.2 + Math.random() * 1.8; // entre 0.2x e 2x
+      prize = Number((aposta * multiplier).toFixed(2));
       novoSaldo += prize;
     }
 
+    // atualiza saldo do usuário
     await pool.query('UPDATE users SET balance = $1 WHERE id = $2', [novoSaldo, user.id]);
 
+    // registra transação
     await pool.query(
       'INSERT INTO transactions (user_id, type, amount, status, balance_after) VALUES ($1, $2, $3, $4, $5)',
-      [user.id, 'scratch', prize - Number(bet), 'finished', novoSaldo]
+      [user.id, 'scratch', prize - aposta, 'finished', novoSaldo]
     );
 
-    res.json({ prize, finalBalance: novoSaldo });
+    // garante retorno consistente
+    res.json({ 
+      prize: prize || 0, 
+      finalBalance: novoSaldo 
+    });
   } catch (err) {
     console.error('Erro ao jogar raspadinha:', err);
-    res.status(500).json({ error: 'Erro interno na raspadinha' });
+    res.status(500).json({ error: 'Erro interno na raspadinha', details: err.message });
   }
 });
 
