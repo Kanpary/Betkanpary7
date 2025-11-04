@@ -36,8 +36,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// ==================== ENDPOINTS ====================
-
 // Cadastro
 app.post('/register', async (req, res) => {
   const { username, email, password, cpf } = req.body;
@@ -100,10 +98,10 @@ app.get('/wallet/:userId', async (req, res) => {
   }
 });
 
-// Depósito
+// Depósito (corrigido, sem buyer_document)
 app.post('/deposit', async (req, res) => {
-  const { userId, amount, currency = 'BRL', buyer_document } = req.body;
-  if (!userId || !amount || !buyer_document) {
+  const { userId, amount, currency = 'BRL' } = req.body;
+  if (!userId || !amount) {
     return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
   }
 
@@ -118,8 +116,7 @@ app.post('/deposit', async (req, res) => {
       userRef: user.id,
       buyer: {
         name: user.username,
-        email: user.email,
-        buyer_document
+        email: user.email
       }
     });
 
@@ -287,4 +284,3 @@ app.get('/bullspay/withdrawals', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor rodando na porta ${PORT}`);
 });
-         
