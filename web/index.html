@@ -280,63 +280,64 @@
       }
     }
 
-   async function deposit() {
-  if (!userId) return alert('Faça login');
-  const reais = Number(document.getElementById('depAmount').value);
+    // depósito
+    async function deposit() {
+      if (!userId) return alert('Faça login');
+      const reais = Number(document.getElementById('depAmount').value);
 
-  if (!reais || reais < 6) return alert('Valor mínimo é R$ 6,00');
+      if (!reais || reais < 6) return alert('Valor mínimo é R$ 6,00');
 
-  try {
-    const r = await fetch(`${API}/deposit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, amount: reais, currency: 'BRL' })
-    });
+      try {
+        const r = await fetch(`${API}/deposit`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, amount: reais, currency: 'BRL' })
+        });
 
-    const j = await r.json();
-    if (!r.ok) return alert(j.error || 'Erro no depósito');
+        const j = await r.json();
+        if (!r.ok) return alert(j.error || 'Erro no depósito');
 
-    let html = `<p><b>Status:</b> ${j.status || j.message || 'Transação criada'}</p>`;
+        let html = `<p><b>Status:</b> ${j.status || j.message || 'Transação criada'}</p>`;
 
-    const pixCode = j.data?.pix_data?.qrcode || j.pixCopiaCola;
-    if (pixCode) {
-      html += `
-        <p><b>Código Pix:</b></p>
-        <textarea id="pixCode" readonly style="width:100%;height:80px">${pixCode}</textarea>
-        <button onclick="copyPix()">📋 Copiar código Pix</button>
-      `;
+        const pixCode = j.data?.pix_data?.qrcode || j.pixCopiaCola;
+        if (pixCode) {
+          html += `
+            <p><b>Código Pix:</b></p>
+            <textarea id="pixCode" readonly style="width:100%;height:80px">${pixCode}</textarea>
+            <button onclick="copyPix()">📋 Copiar código Pix</button>
+          `;
+        }
+
+        const checkout = j.checkoutUrl || j.data?.payment_data?.checkout_url;
+        if (checkout) {
+          html += `<p><a href="${checkout}" target="_blank">Abrir checkout</a></p>`;
+        }
+
+        document.getElementById('dep').innerHTML = html;
+
+        // Só redireciona se o depósito estiver concluído
+        const status = j.status || j.data?.payment_data?.status;
+        const sucesso = j.success === true || status === 'paid';
+
+        if (sucesso) {
+          setTimeout(() => {
+            wallet();
+            loadTransactions();
+            showPanel('scratchPanel');
+          }, 3000);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Erro de rede ao criar depósito');
+      }
     }
 
-    const checkout = j.checkoutUrl || j.data?.payment_data?.checkout_url;
-    if (checkout) {
-      html += `<p><a href="${checkout}" target="_blank">Abrir checkout</a></p>`;
+    function copyPix() {
+      const pixCode = document.getElementById('pixCode');
+      pixCode.select();
+      document.execCommand('copy');
+      alert('Código Pix copiado!');
     }
-
-    document.getElementById('dep').innerHTML = html;
-
-    // Só redireciona se o depósito estiver concluído
-    const status = j.status || j.data?.payment_data?.status;
-    const sucesso = j.success === true || status === 'paid';
-
-    if (sucesso) {
-      setTimeout(() => {
-        wallet();
-        loadTransactions();
-        showPanel('scratchPanel');
-      }, 3000);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Erro de rede ao criar depósito');
-  }
-}
-
-function copyPix() {
-  const pixCode = document.getElementById('pixCode');
-  pixCode.select();
-  document.execCommand('copy');
-  alert('Código Pix copiado!');
-}
 
     // saque
     async function withdraw() {
@@ -431,4 +432,4 @@ function copyPix() {
     }
   </script>
 </body>
-  </html>
+</html>
