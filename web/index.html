@@ -24,7 +24,7 @@
       border-radius: 8px;
       margin-bottom: 12px;
     }
-    input, textarea {
+    input, textarea, select {
       width: 100%;
       margin-bottom: 6px;
       padding: 6px;
@@ -158,277 +158,140 @@
     <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
   </div>
 
-  <!-- Histórico -->
-  <div class="card hidden" id="historyPanel">
-    <h3>Histórico de Transações</h3>
-    <table>
-      <thead>
-        <tr><th>Data</th><th>Tipo</th><th>Valor</th><th>Saldo após</th></tr>
-      </thead>
-      <tbody id="txBody">
-        <tr><td colspan="4">Sem transações</td></tr>
-      </tbody>
-    </table>
-    <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
-  </div>
-
-  <!-- Raspadinha -->
+  <!-- Painel de raspadinha -->
   <div class="card hidden" id="scratchPanel">
     <h3>Raspadinha</h3>
-    <div class="scratch-content" id="content">
-      <div class="tag">Seu prêmio</div>
-      <div class="prize" id="prizeText">R$ 0,00</div>
-      <div class="sub" id="prizeLabel">Clique em “Raspar agora”</div>
-    </div>
-
-    <div style="margin-top:8px">
-      <label>Aposta:
-        <input id="betAmount" type="number" value="1.00" min="0.2" max="30" step="0.01" style="width:100px">
-      </label>
-    </div>
-
-    <div class="actions">
-      <span class="tag">Saldo: <span class="balance" id="balance">R$ 0,00</span></span>
-      <button class="btn-primary" onclick="playScratch()">Raspar agora</button>
-      <button class="btn" onclick="resetScratch()">Raspar de novo</button>
-    </div>
+    <input id="scratchBet" type="number" value="5" min="1" step="0.01">
+    <button class="btn-primary" onclick="playScratch()">Jogar</button>
+    <div id="scratchResult"></div>
     <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
   </div>
 
-  <!-- Scripts -->
+  <!-- Painel de histórico -->
+  <div class="card hidden" id="transactionsPanel">
+    <h3>Histórico de Transações</h3>
+    <div id="transactions"></div>
+    <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
+  </div>
+
+  <!-- Painel BullsPay -->
+  <div class="card hidden" id="bullspayPanel">
+    <h3>Integração BullsPay</h3>
+    <div class="actions">
+      <button class="btn" onclick="loadBullsTransactions()">Transações BullsPay</button>
+      <button class="btn" onclick="loadBullsBalance()">Saldo BullsPay</button>
+      <button class="btn" onclick="loadBullsWithdrawals()">Saques BullsPay</button>
+    </div>
+    <div id="bullsResult"></div>
+    <button onclick="showPanel('profilePanel')">⬅️ Voltar</button>
+  </div>
+
   <script>
-    const API = 'https://kanparycasino.onrender.com';
-    let userId = null;
-    let userEmail = null;
+    let currentUser = null;
 
-    // utilitário
-    const fmt = v => (typeof v === 'number')
-      ? v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
-      : v;
-
-    // exibir painéis
     function showPanel(id) {
-      ['registerPanel','loginPanel','profilePanel','depositPanel','withdrawPanel','historyPanel','scratchPanel']
-        .forEach(p => document.getElementById(p).classList.add('hidden'));
+      document.querySelectorAll('.card').forEach(c => c.classList.add('hidden'));
       document.getElementById(id).classList.remove('hidden');
     }
 
-    // cadastro
     async function register() {
-      const username = document.getElementById('regUsername').value.trim();
-      const email = document.getElementById('regEmail').value.trim();
-      const password = document.getElementById('regPassword').value.trim();
-      const cpf = document.getElementById('regCpf').value.trim();
-
-      if (!username || !email || !password || !cpf) return alert('Preencha todos os campos');
-
-      try {
-        const r = await fetch(`${API}/register`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ username, email, password, cpf })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no cadastro');
-
-        alert('Cadastro realizado com sucesso!');
-        showPanel('loginPanel');
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao cadastrar');
-      }
+      const username = regUsername.value;
+      const email = regEmail.value;
+      const password = regPassword.value;
+      const cpf = regCpf.value;
+      const res = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ username, email, password, cpf })
+      });
+      const data = await res.json();
+      regResult.innerText = JSON.stringify(data);
     }
 
-    // login
     async function login() {
-      const email = document.getElementById('loginEmail').value.trim();
-      const password = document.getElementById('loginPassword').value.trim();
-      if (!email || !password) return alert('Informe e-mail e senha');
-
-      try {
-        const r = await fetch(`${API}/login`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email, password })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no login');
-
-        userId = j.userId;
-        userEmail = j.email;
-        document.getElementById('profileInfo').innerText = `Logado como ${userEmail}`;
-        wallet();
+      const email = loginEmail.value;
+      const password = loginPassword.value;
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (data.userId) {
+        currentUser = data;
+        profileInfo.innerText = `Usuário: ${data.email} (ID: ${data.userId})`;
         showPanel('profilePanel');
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao efetuar login');
+      } else {
+        loginResult.innerText = data.error || 'Erro no login';
       }
     }
 
-    // carteira
-    async function wallet() {
-      if (!userId) return;
-      try {
-        const r = await fetch(`${API}/wallet/${userId}`);
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro ao buscar carteira');
-
-        document.getElementById('balance').innerText = fmt(j.balance || 0);
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao buscar carteira');
-      }
-    }
-
-    // depósito
     async function deposit() {
-      if (!userId) return alert('Faça login');
-      const reais = Number(document.getElementById('depAmount').value);
-
-      if (!reais || reais < 6) return alert('Valor mínimo é R$ 6,00');
-
-      try {
-        const r = await fetch(`${API}/deposit`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, amount: reais, currency: 'BRL' })
-        });
-
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no depósito');
-
-        let html = `<p><b>Status:</b> ${j.status || j.message || 'Transação criada'}</p>`;
-
-        const pixCode = j.data?.pix_data?.qrcode || j.pixCopiaCola;
-        if (pixCode) {
-          html += `
-            <p><b>Código Pix:</b></p>
-            <textarea id="pixCode" readonly style="width:100%;height:80px">${pixCode}</textarea>
-            <button onclick="copyPix()">📋 Copiar código Pix</button>
-          `;
-        }
-
-        const checkout = j.checkoutUrl || j.data?.payment_data?.checkout_url;
-        if (checkout) {
-          html += `<p><a href="${checkout}" target="_blank">Abrir checkout</a></p>`;
-        }
-
-        document.getElementById('dep').innerHTML = html;
-
-        // Só redireciona se o depósito estiver concluído
-        const status = j.status || j.data?.payment_data?.status;
-        const sucesso = j.success === true || status === 'paid';
-
-        if (sucesso) {
-          setTimeout(() => {
-            wallet();
-            loadTransactions();
-            showPanel('scratchPanel');
-          }, 3000);
-        }
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao criar depósito');
-      }
+      const amount = depAmount.value;
+      const res = await fetch('/deposit', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ userId: currentUser.userId, amount })
+      });
+      const data = await res.json();
+      dep.innerText = JSON.stringify(data, null, 2);
     }
 
-    function copyPix() {
-      const pixCode = document.getElementById('pixCode');
-      pixCode.select();
-      document.execCommand('copy');
-      alert('Código Pix copiado!');
-    }
-
-    // saque
     async function withdraw() {
-      if (!userId) return alert('Faça login');
-      let reais = Number(document.getElementById('saqAmount').value);
-      const pixType = document.getElementById('pixType').value;
-      const pixKey = document.getElementById('pixKey').value.trim();
-
-      if (!reais || reais < 10) return alert('Valor mínimo é R$ 10,00');
-      if (reais > 500) return alert('Valor máximo é R$ 500,00');
-      if (!pixKey) return alert('Informe a chave Pix');
-
-      const taxa = reais * 0.03;
-      const valorLiquido = reais - taxa;
-
-      try {
-        const r = await fetch(`${API}/payout`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            userId, amount: reais, currency:'BRL',
-            destination: { type: pixType, key: pixKey }
-          })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no saque');
-
-        document.getElementById('saq').innerText =
-          `Solicitado: ${fmt(reais)} | Taxa: ${fmt(taxa)} | Líquido: ${fmt(valorLiquido)} → Status: ${j.status}`;
-        wallet();
-        loadTransactions();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao solicitar saque');
-      }
+      const amount = saqAmount.value;
+      const destination = { type: pixType.value, key: pixKey.value };
+      const res = await fetch('/payout', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ userId: currentUser.userId, amount, destination })
+      });
+      const data = await res.json();
+      saq.innerText = JSON.stringify(data, null, 2);
     }
 
-    // histórico
     async function loadTransactions() {
-      if (!userId) return;
-      try {
-        const r = await fetch(`${API}/transactions/${userId}`);
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro ao buscar histórico');
-
-        const rows = (j.items || []).map(tx => `
-          <tr>
-            <td>${new Date(tx.created_at).toLocaleString('pt-BR')}</td>
-            <td>${tx.type}</td>
-            <td>${fmt(tx.amount)}</td>
-            <td>${fmt(tx.balance_after)}</td>
-          </tr>
-        `).join('');
-
-        document.getElementById('txBody').innerHTML = rows || '<tr><td colspan="4">Sem transações</td></tr>';
-        showPanel('historyPanel');
-      } catch (err) {
-        console.error(err);
-        alert('Erro ao carregar transações');
-      }
+      const res = await fetch(`/transactions/${currentUser.userId}`);
+      const data = await res.json();
+      let html = '<table><tr><th>ID</th><th>Tipo</th><th>Valor</th><th>Status</th><th>Saldo</th></tr>';
+      data.items.forEach(tx => {
+        html += `<tr><td>${tx.id}</td><td>${tx.type}</td><td>${tx.amount}</td><td>${tx.status}</td><td>${tx.balance_after}</td></tr>`;
+      });
+      html += '</table>';
+      transactions.innerHTML = html;
+      showPanel('transactionsPanel');
     }
 
-    // raspadinha
     async function playScratch() {
-      if (!userId) return alert('Faça login');
-      const aposta = Number(document.getElementById('betAmount').value);
-      if (!aposta || aposta < 0.2 || aposta > 30) return alert('Aposta entre R$ 0,20 e R$ 30,00');
-
-      try {
-        const r = await fetch(`${API}/scratch/play`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ userId, bet: aposta })
-        });
-        const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro na raspadinha');
-
-        document.getElementById('prizeText').innerText = fmt(j.prize || 0);
-        document.getElementById('prizeLabel').innerText = '';
-        document.getElementById('balance').innerText = fmt(j.finalBalance || 0);
-        wallet();
-        loadTransactions();
-      } catch (err) {
-        console.error(err);
-        alert('Erro de rede ao jogar raspadinha');
-      }
+      const bet = scratchBet.value;
+      const res = await fetch('/scratch/play', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ userId: currentUser.userId, bet })
+      });
+      const data = await res.json();
+      scratchResult.innerText = `Prêmio: ${data.prize} | Saldo final: ${data.finalBalance}`;
     }
 
-    function resetScratch() {
-      document.getElementById('prizeText').innerText = 'R$ 0,00';
-      document.getElementById('prizeLabel').innerText = 'Clique em “Raspar agora”';
+    // BullsPay integrações reais
+    async function loadBullsTransactions() {
+      const res = await fetch('/bullspay/transactions');
+      const data = await res.json();
+      bullsResult.innerText = JSON.stringify(data, null, 2);
+      showPanel('bullspayPanel');
+    }
+
+    async function loadBullsBalance() {
+      const res = await fetch('/bullspay/balance');
+      const data = await res.json();
+      bullsResult.innerText = JSON.stringify(data, null, 2);
+      showPanel('bullspayPanel');
+    }
+
+    async function loadBullsWithdrawals() {
+      const res = await fetch('/bullspay/withdrawals');
+      const data = await res.json();
+      bullsResult.innerText = JSON.stringify(data, null, 2);
+      showPanel('bullspayPanel');
     }
   </script>
 </body>
