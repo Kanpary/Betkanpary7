@@ -227,15 +227,27 @@
     }
 
     async function deposit() {
-      const amount = depAmount.value;
-      const res = await fetch('/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({ userId: currentUser.userId, amount })
-      });
-      const data = await res.json();
-      dep.innerText = JSON.stringify(data, null, 2);
-    }
+  const amount = depAmount.value;
+  const res = await fetch('/deposit', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId: currentUser.userId, amount })
+  });
+  const data = await res.json();
+
+  if (data.pix?.qrcode) {
+    dep.innerHTML = `
+      <p>Status: ${data.status}</p>
+      <p><b>Código Pix:</b></p>
+      <textarea readonly style="width:100%;height:80px">${data.pix.qrcode}</textarea>
+      ${data.pix.qr_code_base64 
+        ? `<img src="data:image/png;base64,${data.pix.qr_code_base64}" style="max-width:200px;margin-top:10px"/>` 
+        : ''}
+    `;
+  } else {
+    dep.innerText = JSON.stringify(data, null, 2);
+  }
+}
 
     async function withdraw() {
       const amount = saqAmount.value;
@@ -295,4 +307,4 @@
     }
   </script>
 </body>
-</html>
+  </html>
