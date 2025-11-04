@@ -132,8 +132,8 @@ app.post('/deposit', async (req, res) => {
     });
 
     await pool.query(
-      'INSERT INTO transactions (user_id, type, amount, status, balance_after) VALUES ($1, $2, $3, $4, $5)',
-      [user.id, 'deposit', Number(amount), intent.status, Number(user.balance)]
+      'INSERT INTO transactions (user_id, type, amount, status, balance_after, external_id) VALUES ($1, $2, $3, $4, $5, $6)',
+      [user.id, 'deposit', Number(amount), intent.status, Number(user.balance), intent.data?.payment_data?.external_id]
     );
 
     res.json(intent);
@@ -246,9 +246,47 @@ app.post('/scratch/play', async (req, res) => {
 });
 
 // Webhook BullsPay
-app.post('/webhook/bullspay', (req, res) => {
+app.post('/webhook/bullspay', async (req, res) => {
   console.log('Webhook BullsPay recebido:', JSON.stringify(req.body, null, 2));
-  res.json({ ok: true });
+
+  try {
+    const paymentData = req.body.data?.payment_data;
+    if (!paymentData) {
+      return res.json({ ok: true });
+    }
+
+    const { external_id, status, amount } = paymentData;
+
+    // Atualiza o status da transação
+    await pool.query(
+      'UPDATE transactions SET status = $1 WHERE external_id = $2',
+      [status, external_id]
+    );
+
+    // Se o pagamento foi concluído, credita o saldo do usuário
+    if (status === 'paid') {
+      const txRes = await pool.query(
+        'SELECT user_id FROM transactions WHERE external_id = $1',
+        [external_id]
+      );
+
+      if (txRes.rows.length > 0) {
+        const userId = txRes.rows[0].user_id;
+
+        await pool.query(
+          'UPDATE users SET balance = balance + $1 WHERE id = $2',
+          [Number(amount), userId]
+        );
+
+        console.log(`Saldo atualizado para usuário ${userId}: +${amount}`);
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Erro ao processar webhook BullsPay:', err);
+    res.status(500).json({ error: 'Erro ao processar webhook' });
+  }
 });
 
 // BullsPay: listar transações
