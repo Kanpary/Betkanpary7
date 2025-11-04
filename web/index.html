@@ -135,7 +135,7 @@
 
   <canvas class="confetti" id="confetti"></canvas>
 
-  <!-- Scripts começam aqui -->
+  <!-- Scripts -->
   <script>
     const API = 'https://kanparycasino.onrender.com'; // URL do backend
     let userId = null;
@@ -145,17 +145,163 @@
     const fmt = v => (typeof v === 'number')
       ? v.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })
       : v;
-      
-      // withdraw (com limite de R$500 e taxa de 3%)
+
+    // login
+    async function login() {
+      const email = document.getElementById('email').value.trim();
+      if (!email) {
+        alert('Informe seu e-mail');
+        return;
+      }
+
+      try {
+        const r = await fetch(`${API}/login`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email })
+        });
+        const j = await r.json();
+        if (!r.ok) {
+          alert(j.error || 'Erro no login');
+          return;
+        }
+
+        userId = j.userId;
+        userEmail = j.email;
+        document.getElementById('user').innerText = `User: ${j.email} (id: ${userId})`;
+        wallet();
+        loadTransactions();
+      } catch (err) {
+        console.error(err);
+        alert('Erro de rede ao efetuar login');
+      }
+    }
+
+    // wallet
+    async function wallet() {
+      if (!userId) {
+        alert('Faça login');
+        return;
+      }
+      try {
+        const r = await fetch(`${API}/wallet/${userId}`);
+        const j = await r.json();
+        if (!r.ok) {
+          alert(j.error || 'Erro ao buscar carteira');
+          return;
+        }
+
+        const balance = j.balance || 0;
+        const hold = j.hold || 0;
+
+        document.getElementById('wallet').innerText =
+          `Saldo: ${fmt(balance)} | Em processamento: ${fmt(hold)}`;
+        document.getElementById('balance').innerText = fmt(balance);
+      } catch (err) {
+        console.error(err);
+        alert('Erro de rede ao buscar carteira');
+      }
+    }
+
+    // deposit
+    async function deposit() {
+      if (!userId) {
+        alert('Faça login');
+        return;
+      }
+      const reais = Number(document.getElementById('depAmount').value);
+      const documento = document.getElementById('depDocument').value.trim();
+
+      if (!reais || reais < 6) {
+        alert('O valor mínimo para depósito é R$ 6,00');
+        return;
+      }
+      if (!documento) {
+        alert('Informe o CPF ou CNPJ do comprador');
+        return;
+      }
+
+      try {
+        const r = await fetch(`${API}/deposit`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ 
+            email: userEmail, 
+            amount: reais, 
+            currency: 'BRL',
+            buyer_document: documento 
+          })
+        });
+        const j = await r.json();
+        if (!r.ok) {
+          alert(j.error || 'Erro no depósito');
+          return;
+        }
+
+        let html = `<p><b>Status:</b> ${j.status || 'pending'}</p>`;
+        if (j.pixQrCode) {
+          html += `<p><img src="${j.pixQrCode}" alt="QR Pix" style="max-width:200px"></p>`;
+        }
+        if (j.qr_code_base64) {
+          html += `<p><img src="data:image/png;base64,${j.qr_code_base64}" alt="QR Pix" style="max-width:200px"></p>`;
+        }
+        if (j.pixCopiaCola) {
+          html += `
+            <p><b>Copia e Cola:</b></p>
+            <textarea id="copiaCola" readonly style="width:100%;height:80px">${j.pixCopiaCola}</textarea>
+            <button onclick="copyCopiaCola()">Copiar código</button>
+          `;
+        }
+        if (j.checkoutUrl) {
+          html += `<p><a href="${j.checkoutUrl}" target="_blank" rel="noopener noreferrer">Abrir checkout</a></p>`;
+        }
+
+        document.getElementById('dep').innerHTML = html;
+
+        // Atualiza carteira e histórico
+        wallet();
+        loadTransactions();
+      } catch (err) {
+        console.error(err);
+        alert('Erro de rede ao criar depósito');
+      }
+    }
+
+    async function copyCopiaCola() {
+      const textarea = document.getElementById('copiaCola');
+      if (!textarea) return;
+      try {
+        await navigator.clipboard.writeText(textarea.value);
+        alert('Código Pix copiado!');
+      } catch (err) {
+        textarea.select();
+        document.execCommand && document.execCommand('copy');
+        alert('Código Pix copiado (fallback)!');
+      }
+    }
+
+    // withdraw (com limite de R$500 e taxa de 3%)
     async function withdraw() {
-      if (!userId) return alert('Faça login');
+      if (!userId) {
+        alert('Faça login');
+        return;
+      }
       let reais = Number(document.getElementById('saqAmount').value);
       const pixType = document.getElementById('pixType').value;
       const pixKey = document.getElementById('pixKey').value.trim();
 
-      if (!reais || reais < 10) return alert('O valor mínimo para saque é R$ 10,00');
-      if (reais > 500) return alert('O valor máximo para saque é R$ 500,00');
-      if (!pixKey) return alert('Informe a chave Pix');
+      if (!reais || reais < 10) {
+        alert('O valor mínimo para saque é R$ 10,00');
+        return;
+      }
+      if (reais > 500) {
+        alert('O valor máximo para saque é R$ 500,00');
+        return;
+      }
+      if (!pixKey) {
+        alert('Informe a chave Pix');
+        return;
+      }
 
       // aplica taxa de 3%
       const taxa = reais * 0.03;
@@ -173,7 +319,10 @@
           })
         });
         const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro no saque');
+        if (!r.ok) {
+          alert(j.error || 'Erro no saque');
+          return;
+        }
         document.getElementById('saq').innerText = 
           `Solicitado: ${fmt(reais)} | Taxa: ${fmt(taxa)} | Líquido: ${fmt(valorLiquido)} → Status: ${j.status}`;
         wallet();
@@ -190,7 +339,10 @@
       try {
         const r = await fetch(`${API}/transactions/${userId}?limit=10`);
         const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro ao buscar histórico');
+        if (!r.ok) {
+          alert(j.error || 'Erro ao buscar histórico');
+          return;
+        }
 
         const rows = (j.items || []).map(tx => {
           let amount = tx.amount;
@@ -217,7 +369,6 @@
     }
 
     // ================== Raspadinha ==================
-    // RTP configurado no backend para 92%
     let currentPrize = 0;
     const canvas = document.getElementById('scratch');
     const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
@@ -258,7 +409,7 @@
       });
       canvas.addEventListener('pointercancel', () => isDown = false);
     }
-    
+
     function scratch(e) {
       if (!ctx || !canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -271,13 +422,16 @@
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    // Jogar raspadinha (RTP definido no backend em 92%)
     async function playScratch() {
-      if (!userId) return alert('Faça login');
+      if (!userId) {
+        alert('Faça login');
+        return;
+      }
 
       const aposta = Number(document.getElementById('betAmount').value);
       if (!aposta || aposta < 0.20 || aposta > 30) {
-        return alert('A aposta deve ser entre R$ 0,20 e R$ 30,00');
+        alert('A aposta deve ser entre R$ 0,20 e R$ 30,00');
+        return;
       }
 
       try {
@@ -287,22 +441,20 @@
           body: JSON.stringify({ userId, bet: aposta })
         });
         const j = await r.json();
-        if (!r.ok) return alert(j.error || 'Erro na raspadinha');
+        if (!r.ok) {
+          alert(j.error || 'Erro na raspadinha');
+          return;
+        }
 
         currentPrize = j.prize || 0;
-
         document.getElementById('prizeText').innerText = `R$ ${Number(currentPrize).toFixed(2)}`;
         document.getElementById('prizeLabel').innerText = '';
         if (typeof j.finalBalance === 'number') {
           document.getElementById('balance').innerText = fmt(j.finalBalance);
-        } else if (j.finalBalance_cents) {
-          document.getElementById('balance').innerText = fmt(j.finalBalance_cents/100);
         }
 
-        // Revela tudo
         if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Atualiza histórico e carteira
         loadTransactions();
         wallet();
       } catch (err) {
