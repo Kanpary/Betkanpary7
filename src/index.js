@@ -131,9 +131,17 @@ app.post('/deposit', async (req, res) => {
       }
     });
 
+    // Salva transação com external_id retornado pela BullsPay
     await pool.query(
       'INSERT INTO transactions (user_id, type, amount, status, balance_after, external_id) VALUES ($1, $2, $3, $4, $5, $6)',
-      [user.id, 'deposit', Number(amount), intent.status, Number(user.balance), intent.data?.payment_data?.external_id]
+      [
+        user.id,
+        'deposit',
+        Number(amount),
+        intent.status,
+        Number(user.balance),
+        intent.data?.payment_data?.external_id || null
+      ]
     );
 
     res.json(intent);
