@@ -1,11 +1,9 @@
-// src/index.js
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
 import { createPaymentIntent, createPayout } from './bullspay.js';
 
 dotenv.config();
@@ -13,50 +11,68 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Necessário para resolver __dirname em ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Middlewares
 app.use(cors());
 app.use(bodyParser.json());
-
-// ✅ Servir arquivos estáticos da pasta "web"
 app.use(express.static(path.join(__dirname, '..', 'web')));
 
-// ✅ Rota raiz entrega o index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'web', 'index.html'));
 });
 
-// "Banco" em memória (para testes)
-const users = {}; // { userId: { email, balance, hold, transactions: [] } }
+// "Banco" em memória
+const users = {}; // { userId: { username, email, password, cpf, balance, hold, transactions: [] } }
 
-// Função utilitária
-function getOrCreateUser(email) {
-  let user = Object.values(users).find(u => u.email === email);
-  if (!user) {
-    const id = 'u' + Date.now();
-    user = { id, email, balance: 0, hold: 0, transactions: [] };
-    users[id] = user;
-  }
-  return user;
+// ==================== FUNÇÕES ====================
+
+function getUserById(id) {
+  return users[id] || null;
+}
+
+function getUserByEmail(email) {
+  return Object.values(users).find(u => u.email === email);
 }
 
 // ==================== ENDPOINTS ====================
 
+// Cadastro
+app.post('/register', (req, res) => {
+  const { username, email, password, cpf } = req.body;
+  if (!username || !email || !password || !cpf) {
+    return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+  }
+
+  if (getUserByEmail(email)) {
+    return res.status(400).json({ error: 'Email já cadastrado' });
+  }
+
+  const id = 'u' + Date.now();
+  users[id] = {
+    id, username, email, password, cpf,
+    balance: 0, hold: 0, transactions: []
+  };
+
+  res.json({ userId: id, email });
+});
+
 // Login
 app.post('/login', (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'E-mail é obrigatório' });
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
-  const user = getOrCreateUser(email);
+  const user = getUserByEmail(email);
+  if (!user || user.password !== password) {
+    return res.status(401).json({ error: 'Credenciais inválidas' });
+  }
+
   res.json({ userId: user.id, email: user.email });
 });
 
 // Carteira
 app.get('/wallet/:userId', (req, res) => {
-  const user = users[req.params.userId];
+  const user = getUserById(req.params.userId);
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
   res.json({ balance: user.balance, hold: user.hold });
@@ -64,18 +80,24 @@ app.get('/wallet/:userId', (req, res) => {
 
 // Depósito
 app.post('/deposit', async (req, res) => {
-  const { email, amount, currency = 'BRL', buyer_document } = req.body;
-  if (!email || !amount) return res.status(400).json({ error: 'Email e valor são obrigatórios' });
-  if (!buyer_document) return res.status(400).json({ error: 'Documento do comprador é obrigatório' });
+  const { userId, amount, currency = 'BRL', buyer_document } = req.body;
+  if (!userId || !amount || !buyer_document) {
+    return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
+  }
 
-  const user = getOrCreateUser(email);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
   try {
     const intent = await createPaymentIntent({
       amount,
       currency,
       userRef: user.id,
-      buyer: { name: email, email, buyer_document }
+      buyer: {
+        name: user.username,
+        email: user.email,
+        buyer_document
+      }
     });
 
     user.transactions.push({
@@ -93,10 +115,10 @@ app.post('/deposit', async (req, res) => {
   }
 });
 
-// Saque (com limite de R$500 e taxa de 3%)
+// Saque
 app.post('/payout', async (req, res) => {
-  const { email, amount, currency = 'BRL', destination } = req.body;
-  if (!email || !amount || !destination) {
+  const { userId, amount, currency = 'BRL', destination } = req.body;
+  if (!userId || !amount || !destination) {
     return res.status(400).json({ error: 'Dados obrigatórios ausentes' });
   }
 
@@ -104,12 +126,12 @@ app.post('/payout', async (req, res) => {
     return res.status(400).json({ error: 'Valor máximo de saque é R$ 500,00' });
   }
 
-  const user = getOrCreateUser(email);
+  const user = getUserById(userId);
+  if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
   if (user.balance < amount) {
     return res.status(400).json({ error: 'Saldo insuficiente' });
   }
 
-  // aplica taxa de 3%
   const taxa = amount * 0.03;
   const valorLiquido = amount - taxa;
 
@@ -144,7 +166,7 @@ app.post('/payout', async (req, res) => {
 
 // Histórico
 app.get('/transactions/:userId', (req, res) => {
-  const user = users[req.params.userId];
+  const user = getUserById(req.params.userId);
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
   const limit = parseInt(req.query.limit || '10', 10);
@@ -152,24 +174,21 @@ app.get('/transactions/:userId', (req, res) => {
   res.json({ items });
 });
 
-// Raspadinha (RTP configurado em 92%)
+// Raspadinha
 app.post('/scratch/play', (req, res) => {
   const { userId, bet } = req.body;
-  const user = users[userId];
+  const user = getUserById(userId);
   if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
   if (!bet || bet <= 0) return res.status(400).json({ error: 'Aposta inválida' });
   if (user.balance < bet) return res.status(400).json({ error: 'Saldo insuficiente' });
 
-  // debita aposta
   user.balance -= bet;
 
-  // RTP 92%: expectativa de retorno
   const rtp = 0.92;
   const chance = Math.random();
   let prize = 0;
 
   if (chance < rtp) {
-    // prêmio aleatório entre 0.2x e 2x a aposta
     const multiplier = 0.2 + Math.random() * 1.8;
     prize = Number((bet * multiplier).toFixed(2));
     user.balance += prize;
